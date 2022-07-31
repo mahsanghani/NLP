@@ -7,6 +7,12 @@ Original file is located at
     https://colab.research.google.com/drive/1dAeQ4Lk0K6XoGJU2Jk1LaS_KAwaK7bNS
 """
 
+!pip install geopandas
+!pip install cartopy
+!pip install metpy==0.9
+!pip uninstall shapely
+!pip install shapely --no-binary shapely
+
 # import datasets directly from kaggle via API token
 !mkdir ~/.kaggle
 !touch ~/.kaggle/kaggle.json
@@ -23,18 +29,15 @@ with open('/root/.kaggle/kaggle.json', 'w') as file:
 !kaggle datasets download -d open-flights/airline-database
 !kaggle datasets download -d open-flights/flight-route-database
 !kaggle datasets download -d thoudamyoihenba/airports
-!kaggle datasets download -d rusiano/european-airports-iata-codes
 
 """### Challenges
-Initially, the NavBlue provided datasets were missing column headers so the same datasets were fetched from Kaggle with an API key.
-
-The Kaggle approach didn't work because the airport dataset online is missing 2 fields such as Type and Source which are included in the NavBlue dataset.
-
-Hence, the NavBlue datasets were ammended to include column headers with the schema provided. We will now incorporate one extra reference dataset for European Airport IATA codes.
+- Initially, the NavBlue provided datasets were missing column headers so the same datasets were fetched from Kaggle with an API key. 
+- The Kaggle approach didn't work because the dataset was missing 2 fields: Type and Source which are included in the NavBlue dataset. 
+- Hence, the NavBlue datasets were amended to include column headers with the schema provided.
 
 ### Problem Statement
 
-We will evaluate the following statistics with respect to Ryanair's share of the European aviation market:
+We will evaluate the following statistics with respect to Ryanair's share of the European aviation market with respect to competing airline carriers:
 1.   connections
     - number
 2.   airports
@@ -44,8 +47,6 @@ We will evaluate the following statistics with respect to Ryanair's share of the
     -   number
     -   shared
     -   exclusive
-
-
 """
 
 # import csv from google drive
@@ -53,128 +54,170 @@ from google.colab import drive
 drive.mount('/content/drive')
 # error datasets missing headers
 
+# Commented out IPython magic to ensure Python compatibility.
+# %matplotlib inline
+
 import numpy as np
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 from google.colab import drive
 drive.mount('/content/drive')
+
+# check for 3 datasets in Google Drive
+# Airlines, Airports, Routes
 
 import os
 for dirname, _, filenames in os.walk('/content/drive/MyDrive/Kaggle/Airlines'):
     for filename in filenames:
         print(os.path.join(dirname, filename))
 
+# import airlines as a pandas dataframe
+
 airlines_df = (
     pd.read_csv('/content/drive/MyDrive/Kaggle/Airlines/airlines.csv', 
                 header=None, names=['id','name','alias','iata','icao','callsign','country','active'],
-                na_values=['\\N', '-', 'NAN', 'unknown'])
-    .rename(columns=str.lower)
-    .rename(columns=lambda col: '_'.join(col.split()))
-    .assign(airline_id=lambda df: df.id.map(str))
-)
+                na_values=['\\N', '-', 'NAN', 'unknown']).assign(airline_id=lambda df: df.id.map(str)))
 
-airlines_df.head()
+airlines_df
 
-airports_df = (
-    pd.read_csv('/content/drive/MyDrive/Kaggle/Airlines/airports.csv',
+# import airports as a pandas dataframe
+
+airports_df = (pd.read_csv('/content/drive/MyDrive/Kaggle/Airlines/airports.csv',
                 header=None, names=['id', 'name', 'city', 'country', 'iata', 'icao', 'latitude', 
                                     'longitude', 'altitude', 'timezone', 'dst', 'tz', 'type', 'source'],
+                na_values=['\\N', '-', 'NAN', 'unknown']).set_index('id').reset_index(drop=True))
+
+# global visualization of airport coordinates
+
+fig, ax = plt.subplots(facecolor='#FCF6F5FF')
+fig.set_size_inches(14, 7)
+
+ax.scatter(airports_df['longitude'], airports_df['latitude'], s=1, alpha=1, edgecolors='none')
+ax.axis('off')
+
+plt.show()
+
+# import routes as a pandas dataframe
+# map all airport ID's and IATA codes to strings
+routes_df = (pd.read_csv('/content/drive/MyDrive/Kaggle/Airlines/routes.csv', 
+                header=None, names=['airline', 'airline_id', 'source', 'source_id', 'destination', 
+                                    'destination_id', 'codeshare', 'stops', 'equipment'],
                 na_values=['\\N', '-', 'NAN', 'unknown'])
-    .set_index('id')
-    .reset_index(drop=True)
-)
-
-eur_airports_iata_df = (
-    pd.read_csv('/content/drive/MyDrive/Kaggle/Airlines/european_iatas_df.csv',
-                header=None, names=['airport_city', 'airport_name', 'airport_iata'],
-                na_values=['\\N', '-', 'NAN', 'unknown'])
-)
-
-eur_airports_df = (
-    airports_df[airports_df.iata.isin(eur_airports_iata_df.airport_iata)].copy()
-    [lambda df: ~df.country.isin(['Russia', 'Turkey'])]
-    .reset_index(drop=True))
-
-# del airports_df, eur_airports_iata_df
-
-print('All:', airports_df.shape)
-print('Europe:', eur_airports_df.shape)
-eur_airports_df.head()
-
-routes_df = (
-    pd.read_csv('/content/drive/MyDrive/Kaggle/Airlines/routes.csv', 
-                header=None, names=['airline', 'airline id', 'source', 'source id', 'destination', 
-                                    'destination id', 'codeshare', 'stops', 'equipment'],
-                na_values=['\\N', '-', 'NAN', 'unknown'])
-    .rename(columns=str.strip)
-    .rename(columns=str.lower)
-    .rename(columns=lambda v: v.replace(' ', '_'))
     .dropna(subset=['airline_id', 'source_id', 'destination_id'], how='any')
     .assign(airline_id=lambda df: df.airline_id.map(int).map(str),
             source=lambda df: df.source.map(str).map(str),
             source_id=lambda df: df.source_id.map(int).map(str),
             destination=lambda df: df.destination.map(str).map(str),
             destination_id=lambda df: df.destination_id.map(int).map(str),
-            route_id=lambda df: df[['source', 'destination']].apply(sorted, axis=1).map('_'.join))
-)
+            route_id=lambda df: df[['source', 'destination']].apply(sorted, axis=1).map('_'.join)))
 
-eur_routes_df = (
-    routes_df[
-        routes_df.source.isin(eur_airports_df.iata)
-        &
-        routes_df.destination.isin(eur_airports_df.iata)
-    ].copy()
-)
+"""# Global Routing Visualizations
+1. Duplicate Airports Dataframe
+  - Source Airport Dataframe
+  - Destination Airport Dataframe
+2. Merge source to routes dataframe based on IATA codes
+3. Merge destination to routes dataframe based on IATA codes
+4. LineString's to connect 
+  - source_(longitude, latitude)
+  - destination_(longitude, latitude)
+"""
 
-print('All:', routes_df.shape)
-print('Europe:', eur_routes_df.shape)
-eur_routes_df.head()
+# duplicate dataframe for source airports
+source_airports = airports_df[['name', 'iata', 'icao', 'latitude', 'longitude']]
+destination_airports = source_airports.copy()
 
-eur_routes_df2 = (
-    eur_routes_df
-    .pipe(pd.merge, 
-          airlines_df[['id', 'icao', 'name', 'country']],
-          left_on=['source'], right_on=['icao'], how='left')
-    .pipe(pd.merge, 
-          eur_airports_df[['iata', 'country', 'city', 'latitude', 'longitude']]
+# duplicate dataframe for destination airports
+source_airports.columns = ['source_' + str(col) for col in source_airports.columns]
+destination_airports.columns = ['destination_' + str(col) for col in destination_airports.columns]
+
+# merge the source and destination dataframes to construct a routes dataframe
+routes = routes_df[['source', 'destination']]
+routes = pd.merge(routes, source_airports, left_on='source', right_on='source_iata')
+routes = pd.merge(routes, destination_airports, left_on='destination', right_on='destination_iata')
+
+print(routes.columns)
+
+import geopandas as gpd
+from shapely.geometry import LineString
+
+# implement LineString's to connect source_(longitude, latitude) with destination_(longitude, latitude)
+
+geometry = [LineString([[routes.iloc[i]['source_longitude'], routes.iloc[i]['source_latitude']], [routes.iloc[i]['destination_longitude'], routes.iloc[i]['destination_latitude']]]) for i in range(routes.shape[0])]
+routes = gpd.GeoDataFrame(routes, geometry=geometry, crs='EPSG:4326')
+print(routes)
+
+# plot black routes on a white background (direct lines)
+
+fig = plt.figure(facecolor='white')
+ax = plt.axes()
+
+fig.set_size_inches(7, 3.5)
+ax.patch.set_facecolor('white')
+
+routes.plot(ax=ax, color='black', linewidth=0.1)
+plt.axis('off')
+plt.title('LineStrings Representing Flight Routes (Direct Lines)')
+plt.setp(ax.spines.values(), color='white')
+plt.setp([ax.get_xticklines(), ax.get_yticklines()], color='white')
+
+plt.show()
+
+import cartopy.crs as ccrs
+
+# plot white routes on a black background (global curvature)
+
+fig = plt.figure(facecolor='black')
+ax = plt.axes(projection=ccrs.Robinson())
+fig.set_size_inches(7, 3.5)
+ax.patch.set_facecolor('black')
+
+routes.plot(ax=ax, transform=ccrs.Geodetic(), color='white', linewidth=0.1, alpha=0.1)
+plt.axis('off')
+plt.title('LineStrings Representing Flight Routes (Global Curvature)', color='w')
+plt.setp(ax.spines.values(), color='black')
+plt.setp([ax.get_xticklines(), ax.get_yticklines()], color='black')
+ax.set_ylim(-7000000, 8800000)
+
+plt.show()
+
+# Second approach to duplicate airports (source and destination)
+# Merge source and destination dataframes using piping methodology
+
+routes2 = (routes_df.pipe(pd.merge, 
+          airlines_df[['id', 'iata', 'name', 'country']],
+          left_on=['source'], right_on=['iata'], how='left')
+          .pipe(pd.merge, 
+          airports_df[['iata', 'country', 'city', 'latitude', 'longitude']]
           .rename(columns=lambda col: 'source_' + col),
           left_on=['source'], right_on=['source_iata'], how='left')
-    .pipe(pd.merge, 
-          eur_airports_df[['iata', 'country', 'city', 'latitude', 'longitude']]
+          .pipe(pd.merge, 
+          airports_df[['iata', 'country', 'city', 'latitude', 'longitude']]
           .rename(columns=lambda col: 'destination_' + col),
           left_on=['destination'], right_on=['destination_iata'], how='right')
-    .assign(is_national_route=lambda df: df.source_country == df.destination_country)
-    .assign(dist=lambda df: np.sqrt(
-        (df.destination_longitude - df.source_longitude) ** 2 
-        + (df.destination_latitude - df.source_latitude) ** 2))
-)
+          .assign(is_national_route=lambda df: df.source_country == df.destination_country)
+          .assign(dist=lambda df: np.sqrt(
+          (df.destination_longitude - df.source_longitude) ** 2 
+          + (df.destination_latitude - df.source_latitude) ** 2)))
 
-eur_routes_df2.sort_values(by='airline', ascending=True).value_counts('airline')
-
-# Commented out IPython magic to ensure Python compatibility.
-# %matplotlib inline
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-import plotly.graph_objects as go
+routes2.sort_values(by='airline', ascending=True).value_counts('airline')
 
 # ensure white background
 plt.rcParams['figure.facecolor'] = 'w'
 
-n_connections_srs = (
-    eur_routes_df2
-    .groupby('airline')
-    .route_id
-    .nunique()
-    .sort_values()[::-1]
-    .rename('# Unique Connections')
-    .rename_axis('Airline')
-)
+# unique connections by top 5 airlines
+connections = (routes2.groupby('airline').route_id
+               .nunique().sort_values()[::-1]
+               .rename('# Connections')
+               .rename_axis('Airline'))
 
+# plot unique connections by top 5 airlines
 fig, ax = plt.subplots(figsize=(10,6))
 
-ax.barh(n_connections_srs.index[:25][::-1], n_connections_srs[:25][::-1])
-ax.barh('FR', n_connections_srs['FR'], color='navy')
+ax.barh(connections.index[:5][::-1], connections[:5][::-1])
+ax.barh('FR', connections['FR'], color='navy')
 
 ax.set_xlabel('Connections')
 
@@ -182,140 +225,118 @@ ax.set_title('Unique Connections', weight='bold')
 ax.grid(axis='x')
 plt.show()
 
-n_exclusive_connections_srs = (
-    eur_routes_df2
-    .groupby('route_id')
-    .airline_id
-    .nunique()
-    [lambda srs: srs == 1]
-    .reset_index()
-    .pipe(pd.merge, eur_routes_df2[['route_id', 'airline']], how='left')
-    .groupby('airline')
-    .route_id
-    .nunique()
-    .sort_values()[::-1]
-    .rename('# Exclusive Connections')
-    .rename_axis('Airline')
-)
+# exclusive connections by top 5 airlines
+exclusive = (routes2.groupby('route_id').airline_id.nunique()
+             [lambda x: x == 1].reset_index()
+            .pipe(pd.merge, routes2[['route_id', 'airline']], how='left')
+            .groupby('airline').route_id
+            .nunique().sort_values()[::-1]
+            .rename('# Exclusive Connections')
+            .rename_axis('Airline'))
 
+# plot exclusive connections by top 5 airlines
 fig, ax = plt.subplots(figsize=(10,6))
 
-ax.barh(n_exclusive_connections_srs.index[:25][::-1], n_exclusive_connections_srs[:25][::-1])
-ax.barh('FR', n_exclusive_connections_srs.loc['FR'], color='navy')
+ax.barh(exclusive.index[:5][::-1], exclusive[:5][::-1])
+ax.barh('FR', exclusive.loc['FR'], color='navy')
 ax.set_xlabel('Exclusive Connections')
 ax.set_title('Exclusive Connections', weight='bold')
 ax.grid(axis='x')
 
 plt.show()
 
+# plot percent of exclusive connections by top 5 airlines
 fig, ax = plt.subplots()
 
-ax.pie(n_exclusive_connections_srs, autopct=lambda pct: ('%.2f' % pct) + '%' if pct > 4 else '',
-       labels=[al if i < 5 else '' for i, al in enumerate(n_exclusive_connections_srs.index)])
-
+ax.pie(exclusive[:5][::-1], autopct=lambda pct: ('%.2f' % pct) + '%' if pct > 4 else '',
+       labels=[al if i < 5 else '' for i, al in enumerate(exclusive[:5][::-1].index)])
+plt.title('Percent of Exclusive Connections (Top 5 Airlines)')
 plt.show()
 
-n_airports_srs = (
-    eur_routes_df2
-    .groupby('airline')
-    .source_id
-    .nunique()
-    .sort_values()[::-1]
-    .rename('# Airports')
-    .rename_axis('Airline')
-)
+# number of base aiports for Ryanair compared to Top 5 Airlines
+airports = (routes2.groupby('airline')
+    .source_id.nunique().sort_values()[::-1]
+    .rename('# Airports').rename_axis('Airline'))
 
+# plot number of base aiports for Ryanair compared to Top 5 Airlines
 fig, ax = plt.subplots(figsize=(10,6))
 
-ax.barh(n_airports_srs.index[:25][::-1], n_airports_srs[:25][::-1])
-ax.barh('FR', n_airports_srs.loc['FR'], color='navy')
+ax.barh(airports.index[:5][::-1], airports[:5][::-1])
+ax.barh('FR', airports.loc['FR'], color='navy')
 ax.set_xlabel('# Airports')
-ax.set_title('Top 25 Airlines\nby Number of Base Airports', weight='bold')
+ax.set_title('Number of Base Airports', weight='bold')
 ax.grid(axis='x')
 
 plt.show()
 
-n_airports_srs.head()
+airports
 
-n_countries_srs = (
-    eur_routes_df2
-    .groupby('airline')
-    .source_country
-    .nunique()
-    .sort_values()[::-1]
-    .rename('# Countries')
-    .rename_axis('Airline')
-)
+# number of base countries for Ryanair compared to Top 5 Airlines
+countries = (routes2.groupby('airline')
+    .source_country.nunique().sort_values()[::-1]
+    .rename('# Countries').rename_axis('Airline'))
 
+# plot number of base aiports for Ryanair compared to Top 5 Airlines
 fig, ax = plt.subplots(figsize=(10,6))
 
-ax.barh(n_countries_srs.index[:25][::-1], n_countries_srs[:25][::-1])
-ax.barh('FR', n_countries_srs.loc['FR'], color='navy')
+ax.barh(countries.index[:5][::-1], countries[:5][::-1])
+ax.barh('FR', countries.loc['FR'], color='navy')
 ax.set_xlabel('# Countries')
-ax.set_title('Top 25 Airlines\nby Number of Base Countries', weight='bold')
+ax.set_title('Number of Base Countries', weight='bold')
 ax.grid(axis='x')
 
 plt.show()
 
-n_competitors_df = (
-    eur_routes_df2.groupby('source_id')
-    .airline_id.nunique().sub(1)
-    .to_frame('n_competitors')
-    .reset_index()
-    .pipe(pd.merge, eur_routes_df2[['source_id', 'airline']].drop_duplicates())
-)
+# number of average competitors per airport for Ryanair compared to Top 5 Airlines
+competitors = (routes2.groupby('source_id').airline_id.nunique().sub(1)
+    .to_frame('n_competitors').reset_index()
+    .pipe(pd.merge, routes2[['source_id', 'airline']].drop_duplicates()))
 
-avg_competitors_srs = (
-    n_competitors_df
-    .groupby('airline')
-    .n_competitors
-    .mean()
-    .sort_values()[::-1]
-)
+average_competitors = (competitors.groupby('airline')
+    .n_competitors.mean().sort_values()[::-1])
 
+# plot number of average competitors per airport for Ryanair compared to Top 5 Airlines
 fig, ax = plt.subplots(figsize=(10, 6))
 
-ax.barh(*list(zip(*list(avg_competitors_srs.reindex(index=n_airports_srs.index[:25]).sort_values().iteritems()))))
-ax.barh('FR', avg_competitors_srs.loc['FR'], color='navy')
+ax.barh(*list(zip(*list(average_competitors.reindex(index=airports.index[:5]).sort_values().iteritems()))))
+ax.barh('FR', average_competitors.loc['FR'], color='navy')
 ax.set_xlabel('Competitors per Airport')
 ax.set_title('Number of Competitors', weight='bold')
 ax.grid(axis='x')
 
 plt.show()
 
-airport_presence_df = (
-    eur_routes_df2
-    .groupby('source_id')
-    .airline
-    .apply(lambda srs: srs.value_counts(normalize=True).rename_axis('airline'))
-    .rename('airport_presence')
-    .reset_index()
-)
+# number of average airport presence for Ryanair compared to Top 5 Airlines
+presence = (routes2.groupby('source_id').airline
+    .apply(lambda x: x.value_counts(normalize=True).rename_axis('airline'))
+    .rename('airport_presence').reset_index())
 
-avg_airport_presence_df = (
-    airport_presence_df
-    .groupby('airline')
-    .airport_presence.mean()
-    .sort_values()[::-1]
-)
+average_presence = (presence.groupby('airline')
+    .airport_presence.mean().sort_values()[::-1])
 
-fig, (ax, ax1) = plt.subplots(1, 2, figsize=(16,6))
+# plot number of average airport presence by base airports for Ryanair compared to Top 5 Airlines
+fig, ax = plt.subplots(figsize=(16,6))
 
-ax.barh(avg_airport_presence_df.index[:25][::-1], avg_airport_presence_df[:25][::-1])
-ax.barh('FR', avg_airport_presence_df.loc['FR'], color='navy')
-ax.set_xlabel('Avg Airport Presence (%)')
-ax.set_title('Top 25 Airlines\nby Avg Airport Presence', weight='bold')
+top5 = average_presence.reindex(index=airports.index[:5]).sort_values()
+ax.barh(top5.index, top5)
+ax.barh('FR', average_presence.loc['FR'], color='navy')
+ax.set_xlabel('Average Airport Presence')
+ax.set_title('Average Airport Presence by Base Airports', weight='bold')
 ax.grid(axis='x')
-
-avg_presence_for_top25_airlines_by_airports = avg_airport_presence_df.reindex(index=n_airports_srs.index[:25]).sort_values()
-ax1.barh(avg_presence_for_top25_airlines_by_airports.index, avg_presence_for_top25_airlines_by_airports)
-ax1.barh('FR', avg_airport_presence_df.loc['FR'], color='navy')
-ax1.set_xlabel('Avg Airport Presence (%)')
-ax1.set_title('Avg Airport Presence\namong Top 25 Airlines by Number of Base Airports', weight='bold')
-ax1.grid(axis='x')
-
-plt.tight_layout()
 plt.show()
 
-avg_airport_presence_df.head()
+"""# Conclusions
+Globally, Ryanair has the highest number of:
+- Unique Connections
+- Exclusive Connections (43%)
+- Average Airport Presence by Number of Base Airports (42%)
+
+Furthermore, it has the least number of:
+- Competitors
+  - Routing Advantage
+- Base Countries
+  - Reduced operational expenditures
+
+Therefore, Ryanair has a competitive advantage within Europe as well as globally in terms of base airports in fewer countries to reduce operating overhead as well as a higher competitive advantage with the most unique and exclusive connections. We hope this will support Ryanair's profit margin sufficiently so they are not pressured to charge passengers for using onboard restrooms (nice try team).
+"""
 
