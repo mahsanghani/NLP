@@ -337,6 +337,16 @@ Furthermore, it has the least number of:
 - Base Countries
   - Reduced operational expenditures
 
+# Future Work
+- Further investigation required:
+  - Aircraft passenger saturation
+  - Fuel to Payload ratio
+  - Maintenance time and cost
+  - Types of aircraft (single / dual / quad)
+  - Average airborne time per aircraft type
+  - Average hangar time per aircraft type
+
+# Takeaways
 Therefore, Ryanair has a competitive advantage within Europe as well as globally in terms of base airports in fewer countries to reduce operating overhead as well as a higher competitive advantage with the most unique and exclusive connections. We hope this will support Ryanair's profit margin sufficiently so they are not pressured to charge passengers for using onboard restrooms (nice try team).
 """
 
