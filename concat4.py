@@ -9,6 +9,7 @@ Original file is located at
 
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import train_test_split
 
 df = pd.read_csv('OnlineKhatt.tsv', sep='\t')
  
@@ -43,5 +44,17 @@ print(df3.groupby(df3.index // 5)['text'].agg(' '.join).to_frame())
 
 output.to_csv('concat_khatt.tsv', sep="\t")
 
+output['file_name'] = 'batch'+(output['file_name'].index + 1).astype(str)+'.jpg'
+
 output
+
+# train_test_split(output, test_size=0.20, random_state=42)
+
+train, test = train_test_split(output, test_size=0.20, random_state=42)
+
+test, val = train_test_split(test, test_size=0.50, random_state=42)
+
+train.to_csv('train.csv',index=False)
+test.to_csv('test.csv',index=False)
+val.to_csv('val.csv',index=False)
 
