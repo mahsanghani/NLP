@@ -58,5 +58,5 @@ test, val = train_test_split(test, test_size=0.50, random_state=42)
 
 train.to_csv('train.tsv',sep="\t")
 test.to_csv('test.tsv',sep="\t")
-val.to_csv('val.tsv',sep="\t")
+val.to_csv('valid.tsv',sep="\t")
 
