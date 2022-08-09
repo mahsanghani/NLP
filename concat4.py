@@ -46,6 +46,8 @@ output.to_csv('concat_khatt.tsv', sep="\t")
 
 output['file_name'] = 'batch'+(output['file_name'].index + 1).astype(str)+'.jpg'
 
+output = output.rename(columns={"file_name": "image"})
+
 output
 
 # train_test_split(output, test_size=0.20, random_state=42)
