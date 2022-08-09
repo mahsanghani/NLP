@@ -40,7 +40,7 @@ output_right = df.groupby(df.index // 5)['text'].agg('\n'.join)
 
 output = pd.concat([output_left, output_right], axis=1)
 
-print(df3.groupby(df3.index // 5)['text'].agg(' '.join).to_frame())
+# print(df3.groupby(df3.index // 5)['text'].agg(' '.join).to_frame())
 
 output.to_csv('concat_khatt.tsv', sep="\t")
 
@@ -54,7 +54,7 @@ train, test = train_test_split(output, test_size=0.20, random_state=42)
 
 test, val = train_test_split(test, test_size=0.50, random_state=42)
 
-train.to_csv('train.csv',index=False)
-test.to_csv('test.csv',index=False)
-val.to_csv('val.csv',index=False)
+train.to_csv('train.tsv',sep="\t")
+test.to_csv('test.tsv',sep="\t")
+val.to_csv('val.tsv',sep="\t")
 
