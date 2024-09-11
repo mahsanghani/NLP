@@ -150,11 +150,93 @@ linear_model.compile(
 # Commented out IPython magic to ensure Python compatibility.
 # %%time
 # history = linear_model.fit(
-#     train_features,
-#     train_labels,
+#     train_features.astype('float32'),
+#     train_labels.astype('float32'),
 #     epochs=100,
 #     # Suppress logging.
 #     verbose=0,
 #     # Calculate validation results on 20% of the training data.
 #     validation_split = 0.2)
+
+plot_loss(history)
+
+test_results['linear_model'] = linear_model.evaluate(
+    test_features.astype('float32'), test_labels.astype('float32'), verbose=0)
+
+def build_and_compile_model(norm):
+  model = keras.Sequential([
+      norm,
+      layers.Dense(64, activation='relu'),
+      layers.Dense(64, activation='relu'),
+      layers.Dense(1)
+  ])
+
+  model.compile(loss='mean_absolute_error',
+                optimizer=tf.keras.optimizers.Adam(0.001))
+  return model
+
+dnn_horsepower_model = build_and_compile_model(horsepower_normalizer)
+
+dnn_horsepower_model.summary()
+
+# Commented out IPython magic to ensure Python compatibility.
+# %%time
+# history = dnn_horsepower_model.fit(
+#     train_features['Horsepower'],
+#     train_labels,
+#     validation_split=0.2,
+#     verbose=0, epochs=100)
+
+plot_loss(history)
+
+x = tf.linspace(0.0, 250, 251)
+y = dnn_horsepower_model.predict(x)
+
+plot_horsepower(x, y)
+
+test_results['dnn_horsepower_model'] = dnn_horsepower_model.evaluate(
+    test_features['Horsepower'], test_labels,
+    verbose=0)
+
+dnn_model = build_and_compile_model(normalizer)
+dnn_model.summary()
+
+# Commented out IPython magic to ensure Python compatibility.
+# %%time
+# history = dnn_model.fit(
+#     train_features.astype('float32'),
+#     train_labels.astype('float32'),
+#     validation_split=0.2,
+#     verbose=0, epochs=100)
+
+plot_loss(history)
+
+test_results['dnn_model'] = dnn_model.evaluate(test_features.astype('float32'), test_labels.astype('float32'), verbose=0)
+
+pd.DataFrame(test_results, index=['Mean absolute error [MPG]']).T
+
+test_predictions = dnn_model.predict(test_features.astype('float32')).flatten()
+
+a = plt.axes(aspect='equal')
+plt.scatter(test_labels.astype('float32'), test_predictions.astype('float32'))
+plt.xlabel('True Values [MPG]')
+plt.ylabel('Predictions [MPG]')
+lims = [0, 50]
+plt.xlim(lims)
+plt.ylim(lims)
+_ = plt.plot(lims, lims)
+
+error = test_predictions - test_labels
+plt.hist(error, bins=25)
+plt.xlabel('Prediction Error [MPG]')
+_ = plt.ylabel('Count')
+
+dnn_model.save('dnn_model.tf', save_format='tf')
+
+reloaded = tf.keras.models.load_model('dnn_model.tf')
+
+test_results['reloaded'] = reloaded.evaluate(
+    test_features.astype('float32'), test_labels.astype('float32'), verbose=0)
+
+pd.DataFrame(test_results, index=['Mean absolute error [MPG]']).T
 
