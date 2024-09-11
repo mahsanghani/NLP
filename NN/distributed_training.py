@@ -82,7 +82,7 @@ callbacks = [
     PrintLR()
 ]
 
-EPOCHS = 1
+EPOCHS = 12
 
 model.fit(train_dataset, epochs=EPOCHS, callbacks=callbacks)
 
@@ -92,7 +92,7 @@ model.fit(train_dataset, epochs=EPOCHS, callbacks=callbacks)
 print(tf.train.latest_checkpoint(checkpoint_dir))
 
 # model.load_weights(tf.train.latest_checkpoint(checkpoint_dir))
-model.load_weights('/content/training_checkpoints/ckpt_1.keras')
+model.load_weights('/content/training_checkpoints/ckpt_12.keras')
 # model.load_weights('/content/training_checkpoints/ckpt_1.weights.h5')
 
 eval_loss, eval_acc = model.evaluate(eval_dataset)
