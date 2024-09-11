@@ -312,7 +312,7 @@ manager = start_checkpoint_manager(mlp)
 
 model_for_saving = tf.keras.Sequential([
   text_vectorization,
-  mlp
+  # mlp
 ])
 
 @tf.function(input_signature=[tf.TensorSpec([None], tf.string)])
