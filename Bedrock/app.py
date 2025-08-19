@@ -12,11 +12,11 @@ app = BedrockAgentCoreApp()
 try:
     # Nova models - using correct model identifiers
     pro_agent = Agent(model="amazon.nova-pro-v1:0")
-    sonic_agent = Agent(model="amazon.nova-lite-v1:0")  # Note: Nova Sonic may be "nova-lite"
+    sonic_agent = Agent(model="amazon.nova-lite-v1:0")
     canvas_agent = Agent(model="amazon.nova-canvas-v1:0")
     micro_agent = Agent(model="amazon.nova-micro-v1:0")
     
-    # Titan Image Generator
+    # Titan Image Generator - separate from text models
     titan_agent = Agent(model="amazon.titan-image-generator-v2:0")
     
     logger.info("All agents initialized successfully")
@@ -24,13 +24,12 @@ try:
 except Exception as e:
     logger.error(f"Error initializing agents: {e}")
     # Fallback to a basic model if specific models fail
-    pro_agent = Agent()  # Use default model
+    pro_agent = Agent()
 
 
 def _extract_response_content(response):
     """Helper function to extract content from agent response"""
     try:
-        # Handle different response formats
         if hasattr(response, 'message'):
             return response.message
         elif hasattr(response, 'content'):
@@ -40,7 +39,6 @@ def _extract_response_content(response):
         elif hasattr(response, 'body'):
             return response.body
         elif isinstance(response, dict):
-            # Try common dictionary keys
             for key in ['content', 'message', 'text', 'response', 'result']:
                 if key in response:
                     return response[key]
@@ -57,16 +55,13 @@ def _safe_invoke_agent(agent, prompt):
     try:
         logger.info(f"Invoking agent with prompt type: {type(prompt)}")
         
-        # Handle different agent invocation methods
+        # Try different invocation methods
         if hasattr(agent, 'invoke'):
             response = agent.invoke(prompt)
-        elif hasattr(agent, 'call'):
-            response = agent.call(prompt)
-        elif hasattr(agent, '__call__'):
+        elif callable(agent):
             response = agent(prompt)
         else:
-            # Try direct invocation
-            response = agent(prompt)
+            response = {"error": "Agent not callable", "agent_type": str(type(agent))}
         
         return response
         
@@ -75,11 +70,12 @@ def _safe_invoke_agent(agent, prompt):
         return {"error": str(e), "type": "agent_invocation_error"}
 
 
+# MAIN ENTRYPOINT - This is the primary entry point for AgentCore
 @app.entrypoint
 def invoke(payload):
-    """Main entrypoint for the application"""
+    """Main entrypoint for the application - handles all requests by default"""
     try:
-        logger.info(f"Received payload: {type(payload)} - {str(payload)[:200]}")
+        logger.info(f"Entrypoint received payload: {type(payload)}")
         
         # Handle different payload types
         if isinstance(payload, str):
@@ -88,142 +84,97 @@ def invoke(payload):
             except json.JSONDecodeError:
                 payload = {"prompt": payload}
         elif payload is None:
-            payload = {}
+            payload = {"prompt": "Hello from AgentCore!"}
         
-        model_type = payload.get("model", "pro")  # Default to pro
+        # Extract request information
+        model_type = payload.get("model", "pro")
         user_prompt = payload.get("prompt", "Hello from AgentCore!")
+        request_type = payload.get("type", "chat")  # chat, image_generation, image_analysis
         
-        logger.info(f"Processing request with model: {model_type}, prompt: {str(user_prompt)[:100]}")
+        logger.info(f"Processing: type={request_type}, model={model_type}")
+        
+        # Route based on request type
+        if request_type == "health":
+            return {
+                "status": "healthy",
+                "models_available": ["pro", "sonic", "canvas", "micro", "titan"],
+                "framework": "bedrock_agentcore",
+                "endpoint": "/invocations"
+            }
+        
+        elif request_type == "image_generation":
+            return _handle_image_generation(payload)
+        
+        elif request_type == "image_analysis":
+            return _handle_image_analysis(payload)
+        
+        else:  # Default to chat
+            return _handle_chat(model_type, user_prompt)
+    
+    except Exception as e:
+        logger.error(f"Error in entrypoint: {e}", exc_info=True)
+        return {
+            "error": str(e),
+            "status": "error",
+            "type": "entrypoint_error"
+        }
+
+
+def _handle_chat(model_type, user_prompt):
+    """Handle chat requests"""
+    try:
+        # IMPORTANT: Titan is for image generation only, not chat
+        if model_type == "titan":
+            return {
+                "error": "Titan model is for image generation only. Use 'type': 'image_generation' or choose a different model (pro, sonic, canvas, micro) for chat.",
+                "status": "error",
+                "available_chat_models": ["pro", "sonic", "canvas", "micro"],
+                "titan_usage": "Use with type: 'image_generation'"
+            }
         
         # Select agent based on model type
         agent_map = {
             "pro": pro_agent,
             "sonic": sonic_agent,
             "canvas": canvas_agent,
-            "micro": micro_agent,
-            "titan": titan_agent
+            "micro": micro_agent
         }
         
         agent = agent_map.get(model_type, pro_agent)
         
-        # Handle different prompt formats based on model
-        if model_type == "titan":
-            # Titan expects specific format for image generation
-            if isinstance(user_prompt, str):
-                formatted_prompt = {
-                    "taskType": "TEXT_IMAGE",
-                    "textToImageParams": {
-                        "text": user_prompt,
-                        "width": 1024,
-                        "height": 1024
-                    }
-                }
-            else:
-                formatted_prompt = user_prompt
+        # Format prompt based on model
+        if model_type == "canvas":
+            # Canvas might need structured input for multimodal
+            formatted_prompt = user_prompt  # Keep it simple for chat
         else:
-            # Text models expect string prompts
             formatted_prompt = user_prompt
         
-        # Safely invoke the agent
         response = _safe_invoke_agent(agent, formatted_prompt)
         
         return {
             "result": _extract_response_content(response),
             "model_used": model_type,
-            "status": "success"
+            "status": "success",
+            "type": "chat_response"
         }
-    
+        
     except Exception as e:
-        logger.error(f"Error in invoke: {e}", exc_info=True)
+        logger.error(f"Error in chat handling: {e}")
         return {
             "error": str(e),
             "status": "error",
-            "type": "invoke_error"
+            "type": "chat_error"
         }
 
 
-@app.route("/")
-def root(payload):
-    """Root endpoint - same as entrypoint"""
-    return invoke(payload)
-
-
-@app.route("/health")
-def health_check(payload=None):
-    """Health check endpoint"""
+def _handle_image_generation(payload):
+    """Handle image generation requests using Titan"""
     try:
-        return {
-            "status": "healthy",
-            "models_available": ["pro", "sonic", "canvas", "micro", "titan"],
-            "timestamp": str(logging.time.time()) if hasattr(logging, 'time') else "unknown"
-        }
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        }
-
-
-@app.route("/chat/<model>")
-def chat_with_model(model, payload):
-    """Route to chat with specific model"""
-    try:
-        logger.info(f"Chat route called with model: {model}")
-        
-        # Validate model parameter
-        valid_models = ["pro", "sonic", "canvas", "micro", "titan"]
-        if model not in valid_models:
-            return {
-                "error": f"Invalid model: {model}. Valid models: {valid_models}",
-                "status": "error"
-            }
-        
-        # Handle payload
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except json.JSONDecodeError:
-                payload = {"prompt": payload}
-        elif payload is None:
-            payload = {}
-        
-        user_prompt = payload.get("prompt", "Hello!")
-        
-        # Create request payload for main invoke function
-        request_payload = {
-            "model": model,
-            "prompt": user_prompt
-        }
-        
-        return invoke(request_payload)
-    
-    except Exception as e:
-        logger.error(f"Error in chat_with_model: {e}", exc_info=True)
-        return {
-            "error": str(e),
-            "status": "error",
-            "type": "chat_route_error"
-        }
-
-
-@app.route("/generate-image")
-def generate_image(payload):
-    """Generate images using Titan"""
-    try:
-        logger.info("Generate image route called")
-        
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except json.JSONDecodeError:
-                return {"error": "Invalid JSON payload", "status": "error"}
-        elif payload is None:
-            payload = {}
-        
         prompt = payload.get("prompt", "A beautiful landscape")
         image_params = payload.get("image_params", {})
         
-        # Format for Titan Image Generator
+        # Correct format for Titan Image Generator v2
+        # Based on AWS Bedrock Titan Image Generator API
         titan_payload = {
             "taskType": "TEXT_IMAGE",
             "textToImageParams": {
@@ -236,53 +187,53 @@ def generate_image(payload):
             }
         }
         
+        logger.info(f"Titan payload: {titan_payload}")
         response = _safe_invoke_agent(titan_agent, titan_payload)
         
         return {
             "result": _extract_response_content(response),
             "model": "titan",
-            "status": "success"
+            "status": "success",
+            "type": "image_generation_response",
+            "request_format": "TEXT_IMAGE with textToImageParams"
         }
-    
+        
     except Exception as e:
-        logger.error(f"Error in generate_image: {e}", exc_info=True)
+        logger.error(f"Error in image generation: {e}")
         return {
             "error": str(e),
             "status": "error",
-            "type": "image_generation_error"
+            "type": "image_generation_error",
+            "note": "Titan model requires specific TEXT_IMAGE format"
         }
 
 
-@app.route("/analyze-image")
-def analyze_image(payload):
-    """Analyze images using Nova Canvas"""
+def _handle_image_analysis(payload):
+    """Handle image analysis requests using Nova Canvas"""
     try:
-        logger.info("Analyze image route called")
-        
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except json.JSONDecodeError:
-                return {"error": "Invalid JSON payload", "status": "error"}
-        elif payload is None:
-            return {"error": "No payload provided", "status": "error"}
-        
         text_prompt = payload.get("text", "Describe this image")
-        image_data = payload.get("image")  # Base64 encoded image
+        image_data = payload.get("image")
         
         if not image_data:
             return {
-                "error": "No image data provided",
-                "status": "error"
+                "error": "No image data provided. Include 'image' field with base64 encoded image data.",
+                "status": "error",
+                "required_format": "{'type': 'image_analysis', 'text': 'description', 'image': 'base64_data'}"
             }
         
-        # Format for Nova Canvas multimodal input
+        # Correct format for Nova Canvas multimodal
+        # Based on AWS Bedrock Nova Canvas API
         multimodal_input = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1000,
             "messages": [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": text_prompt},
+                        {
+                            "type": "text",
+                            "text": text_prompt
+                        },
                         {
                             "type": "image",
                             "source": {
@@ -296,52 +247,115 @@ def analyze_image(payload):
             ]
         }
         
+        logger.info(f"Canvas multimodal input structure prepared")
         response = _safe_invoke_agent(canvas_agent, multimodal_input)
         
         return {
             "result": _extract_response_content(response),
             "model": "canvas",
-            "status": "success"
+            "status": "success",
+            "type": "image_analysis_response"
         }
-    
+        
     except Exception as e:
-        logger.error(f"Error in analyze_image: {e}", exc_info=True)
+        logger.error(f"Error in image analysis: {e}")
         return {
             "error": str(e),
             "status": "error",
-            "type": "image_analysis_error"
+            "type": "image_analysis_error",
+            "note": "Canvas model requires proper multimodal message format"
         }
 
 
-# Add a catch-all route for debugging
-@app.route("/<path>")
-def catch_all(path, payload):
-    """Catch-all route for debugging"""
-    return {
-        "error": f"Route not found: /{path}",
-        "available_routes": [
-            "/",
-            "/health", 
-            "/chat/<model>",
-            "/generate-image",
-            "/analyze-image"
-        ],
-        "status": "error"
-    }
+# Optional: Add routes if the framework supports them
+try:
+    @app.route("/health")
+    def health_check(payload=None):
+        """Health check route - may not be supported"""
+        return {
+            "status": "healthy",
+            "models_available": ["pro", "sonic", "canvas", "micro", "titan"],
+            "note": "Use /invocations endpoint for all requests",
+            "chat_models": ["pro", "sonic", "canvas", "micro"],
+            "image_generation": "titan",
+            "image_analysis": "canvas"
+        }
+    
+    @app.route("/models")
+    def list_models(payload=None):
+        """List available models and their purposes"""
+        return {
+            "models": {
+                "pro": {
+                    "purpose": "Complex reasoning and analysis",
+                    "speed": "slower",
+                    "quality": "highest",
+                    "use_for": ["detailed analysis", "complex questions", "reasoning tasks"]
+                },
+                "sonic": {
+                    "purpose": "Balanced speed and quality",
+                    "speed": "fast",
+                    "quality": "good",
+                    "use_for": ["general chat", "creative writing", "balanced tasks"]
+                },
+                "micro": {
+                    "purpose": "Fast responses, cost-effective",
+                    "speed": "fastest",
+                    "quality": "basic",
+                    "use_for": ["simple questions", "quick responses", "basic tasks"]
+                },
+                "canvas": {
+                    "purpose": "Multimodal (text + images)",
+                    "speed": "moderate",
+                    "quality": "high",
+                    "use_for": ["image analysis", "multimodal tasks", "vision tasks"]
+                },
+                "titan": {
+                    "purpose": "Image generation only",
+                    "speed": "moderate",
+                    "quality": "high",
+                    "use_for": ["creating images from text descriptions"],
+                    "note": "Not for chat - use type: 'image_generation'"
+                }
+            }
+        }
+    
+except Exception as e:
+    logger.warning(f"Routes not supported by framework: {e}")
 
 
 if __name__ == "__main__":
     logger.info("Starting Bedrock AgentCore application...")
     try:
-        # Test agent initialization
-        logger.info("Testing agent initialization...")
-        test_response = _safe_invoke_agent(pro_agent, "Hello, test message")
-        logger.info(f"Test response: {_extract_response_content(test_response)}")
+        # Test basic functionality
+        logger.info("Testing basic functionality...")
+        test_payload = {"prompt": "Hello, this is a test", "model": "micro"}
+        test_response = invoke(test_payload)
+        logger.info(f"Test response: {test_response}")
         
-        # Run the application
-        logger.info("Starting server on port 8080...")
-        app.run(host="0.0.0.0", port=8080)
+        # Test image generation
+        logger.info("Testing image generation...")
+        image_test_payload = {"type": "image_generation", "prompt": "A simple test image"}
+        image_response = invoke(image_test_payload)
+        logger.info(f"Image test response: {image_response}")
+        
+        # Start the application
+        logger.info("Starting AgentCore server on port 8080...")
+        app.run(host="0.0.0.0", port=8080, debug=True)
+        
     except Exception as e:
         logger.error(f"Failed to start application: {e}", exc_info=True)
         print(f"Error starting app: {e}")
-
+        
+        # Try alternative startup methods
+        try:
+            logger.info("Trying alternative startup...")
+            app.start()
+        except Exception as e2:
+            logger.error(f"Alternative startup failed: {e2}")
+            
+        try:
+            logger.info("Trying basic run...")
+            app.run()
+        except Exception as e3:
+            logger.error(f"Basic run failed: {e3}")
