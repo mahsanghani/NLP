@@ -183,14 +183,34 @@ def _handle_chat(model_type, user_prompt):
 
 
 def _handle_image_generation(payload):
-    """Handle image generation requests using Titan"""
+    """Handle image generation requests using Titan with direct Bedrock API"""
     try:
         prompt = payload.get("prompt", "A beautiful landscape")
         image_params = payload.get("image_params", {})
         
-        # Try different Titan payload formats
-        # Format 1: Direct Bedrock format
-        titan_payload_v1 = {
+        # If we have direct Bedrock client, use it
+        if bedrock_client and titan_model_id:
+            return _generate_image_with_bedrock(prompt, image_params)
+        
+        # Fallback to Agent wrapper (will likely fail but we'll try)
+        logger.warning("Using Agent wrapper for Titan (may fail)")
+        return _generate_image_with_agent(prompt, image_params)
+        
+    except Exception as e:
+        logger.error(f"Error in image generation: {e}")
+        return {
+            "error": str(e),
+            "status": "error",
+            "type": "image_generation_error",
+            "note": "Check Titan model configuration and AWS credentials"
+        }
+
+
+def _generate_image_with_bedrock(prompt, image_params):
+    """Generate image using direct Bedrock client (recommended approach)"""
+    try:
+        # Correct Bedrock API format for Titan Image Generator
+        request_body = {
             "taskType": "TEXT_IMAGE",
             "textToImageParams": {
                 "text": prompt,
@@ -202,40 +222,101 @@ def _handle_image_generation(payload):
             }
         }
         
-        # Format 2: Simple prompt format
-        titan_payload_v2 = prompt
+        logger.info(f"Calling Bedrock directly with: {request_body}")
         
-        # Format 3: Anthropic-style format (if Titan uses similar structure)
-        titan_payload_v3 = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            "max_tokens": 1000,
-            "model": "amazon.titan-image-generator-v2:0"
+        # Call Bedrock API directly
+        response = bedrock_client.invoke_model(
+            modelId=titan_model_id,
+            body=json.dumps(request_body),
+            contentType='application/json',
+            accept='application/json'
+        )
+        
+        # Parse response
+        response_body = json.loads(response['body'].read())
+        
+        logger.info("Bedrock API call successful")
+        
+        return {
+            "result": response_body,
+            "model": "titan",
+            "status": "success",
+            "type": "image_generation_response",
+            "method": "direct_bedrock_api"
         }
         
-        logger.info(f"Trying Titan image generation with prompt: {prompt}")
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        error_message = e.response['Error']['Message']
         
-        # Try different payload formats
+        return {
+            "error": f"Bedrock API error: {error_code} - {error_message}",
+            "status": "error",
+            "type": "bedrock_api_error",
+            "suggestion": "Check AWS credentials, model access permissions, and region"
+        }
+        
+    except Exception as e:
+        logger.error(f"Direct Bedrock call failed: {e}")
+        return {
+            "error": str(e),
+            "status": "error",
+            "type": "bedrock_direct_error"
+        }
+
+
+def _generate_image_with_agent(prompt, image_params):
+    """Fallback: Try Agent wrapper with different formats"""
+    try:
+        if not titan_agent:
+            return {
+                "error": "Titan agent not available and no Bedrock client configured",
+                "status": "error",
+                "type": "titan_unavailable"
+            }
+        
+        # Try different payload formats for Agent wrapper
         formats_to_try = [
-            ("Direct Bedrock format", titan_payload_v1),
-            ("Simple prompt", titan_payload_v2),
-            ("Anthropic-style format", titan_payload_v3)
+            # Format 1: Direct Bedrock format (will likely fail due to message wrapping)
+            {
+                "name": "Direct Bedrock format",
+                "payload": {
+                    "taskType": "TEXT_IMAGE",
+                    "textToImageParams": {
+                        "text": prompt,
+                        "width": image_params.get("width", 1024),
+                        "height": image_params.get("height", 1024),
+                        "cfgScale": image_params.get("cfg_scale", 7.0),
+                        "seed": image_params.get("seed", 0),
+                        "numberOfImages": image_params.get("number_of_images", 1)
+                    }
+                }
+            },
+            # Format 2: Simple prompt
+            {
+                "name": "Simple prompt",
+                "payload": prompt
+            },
+            # Format 3: Prompt with parameters
+            {
+                "name": "Prompt with parameters",
+                "payload": {
+                    "prompt": prompt,
+                    "parameters": image_params
+                }
+            }
         ]
         
         last_error = None
-        for format_name, payload_format in formats_to_try:
+        for format_info in formats_to_try:
             try:
-                logger.info(f"Trying {format_name}")
-                response = _safe_invoke_agent(titan_agent, payload_format)
+                logger.info(f"Trying Agent wrapper with {format_info['name']}")
+                response = _safe_invoke_agent(titan_agent, format_info['payload'])
                 
                 # Check if response contains an error
                 if isinstance(response, dict) and "error" in response:
                     last_error = response["error"]
-                    logger.warning(f"{format_name} failed: {last_error}")
+                    logger.warning(f"{format_info['name']} failed: {last_error}")
                     continue
                 
                 # Success case
@@ -244,30 +325,29 @@ def _handle_image_generation(payload):
                     "model": "titan",
                     "status": "success",
                     "type": "image_generation_response",
-                    "format_used": format_name
+                    "method": "agent_wrapper",
+                    "format_used": format_info['name']
                 }
                 
             except Exception as e:
                 last_error = str(e)
-                logger.warning(f"{format_name} failed with exception: {e}")
+                logger.warning(f"{format_info['name']} failed with exception: {e}")
                 continue
         
         # If all formats failed
         return {
-            "error": f"All Titan formats failed. Last error: {last_error}",
+            "error": f"All Agent wrapper formats failed. Last error: {last_error}",
             "status": "error",
-            "type": "image_generation_error",
-            "attempted_formats": [f[0] for f in formats_to_try],
-            "note": "Titan model may require specific authentication or different payload structure"
+            "type": "agent_wrapper_failed",
+            "attempted_formats": [f['name'] for f in formats_to_try],
+            "recommendation": "Use direct Bedrock API instead of Agent wrapper for Titan"
         }
         
     except Exception as e:
-        logger.error(f"Error in image generation: {e}")
         return {
             "error": str(e),
             "status": "error",
-            "type": "image_generation_error",
-            "note": "Check Titan model configuration and payload format"
+            "type": "agent_fallback_error"
         }
 
 
