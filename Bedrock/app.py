@@ -2,6 +2,8 @@ from bedrock_agentcore import BedrockAgentCoreApp
 from strands import Agent
 import json
 import logging
+import boto3
+from botocore.exceptions import ClientError
 
 # Set up logging for debugging
 logging.basicConfig(level=logging.INFO)
@@ -16,8 +18,19 @@ try:
     canvas_agent = Agent(model="amazon.nova-canvas-v1:0")
     micro_agent = Agent(model="amazon.nova-micro-v1:0")
     
-    # Titan Image Generator - separate from text models
-    titan_agent = Agent(model="amazon.titan-image-generator-v2:0")
+    # Titan Image Generator - Use direct Bedrock client instead of Agent wrapper
+    # The Agent wrapper treats Titan like a conversational model, but it needs raw API calls
+    try:
+        bedrock_client = boto3.client('bedrock-runtime')
+        titan_model_id = "amazon.titan-image-generator-v2:0"
+        logger.info("Initialized direct Bedrock client for Titan")
+        titan_agent = None  # We'll use bedrock_client directly
+    except Exception as e:
+        logger.warning(f"Could not initialize Bedrock client: {e}")
+        # Fallback to Agent wrapper (will likely fail but we'll handle it)
+        titan_agent = Agent(model="amazon.titan-image-generator-v2:0")
+        bedrock_client = None
+        titan_model_id = None
     
     logger.info("All agents initialized successfully")
     
@@ -25,6 +38,8 @@ except Exception as e:
     logger.error(f"Error initializing agents: {e}")
     # Fallback to a basic model if specific models fail
     pro_agent = Agent()
+    bedrock_client = None
+    titan_model_id = None
 
 
 def _extract_response_content(response):
