@@ -173,9 +173,9 @@ def _handle_image_generation(payload):
         prompt = payload.get("prompt", "A beautiful landscape")
         image_params = payload.get("image_params", {})
         
-        # Correct format for Titan Image Generator v2
-        # Based on AWS Bedrock Titan Image Generator API
-        titan_payload = {
+        # Try different Titan payload formats
+        # Format 1: Direct Bedrock format
+        titan_payload_v1 = {
             "taskType": "TEXT_IMAGE",
             "textToImageParams": {
                 "text": prompt,
@@ -187,15 +187,63 @@ def _handle_image_generation(payload):
             }
         }
         
-        logger.info(f"Titan payload: {titan_payload}")
-        response = _safe_invoke_agent(titan_agent, titan_payload)
+        # Format 2: Simple prompt format
+        titan_payload_v2 = prompt
         
+        # Format 3: Anthropic-style format (if Titan uses similar structure)
+        titan_payload_v3 = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "max_tokens": 1000,
+            "model": "amazon.titan-image-generator-v2:0"
+        }
+        
+        logger.info(f"Trying Titan image generation with prompt: {prompt}")
+        
+        # Try different payload formats
+        formats_to_try = [
+            ("Direct Bedrock format", titan_payload_v1),
+            ("Simple prompt", titan_payload_v2),
+            ("Anthropic-style format", titan_payload_v3)
+        ]
+        
+        last_error = None
+        for format_name, payload_format in formats_to_try:
+            try:
+                logger.info(f"Trying {format_name}")
+                response = _safe_invoke_agent(titan_agent, payload_format)
+                
+                # Check if response contains an error
+                if isinstance(response, dict) and "error" in response:
+                    last_error = response["error"]
+                    logger.warning(f"{format_name} failed: {last_error}")
+                    continue
+                
+                # Success case
+                return {
+                    "result": _extract_response_content(response),
+                    "model": "titan",
+                    "status": "success",
+                    "type": "image_generation_response",
+                    "format_used": format_name
+                }
+                
+            except Exception as e:
+                last_error = str(e)
+                logger.warning(f"{format_name} failed with exception: {e}")
+                continue
+        
+        # If all formats failed
         return {
-            "result": _extract_response_content(response),
-            "model": "titan",
-            "status": "success",
-            "type": "image_generation_response",
-            "request_format": "TEXT_IMAGE with textToImageParams"
+            "error": f"All Titan formats failed. Last error: {last_error}",
+            "status": "error",
+            "type": "image_generation_error",
+            "attempted_formats": [f[0] for f in formats_to_try],
+            "note": "Titan model may require specific authentication or different payload structure"
         }
         
     except Exception as e:
@@ -204,7 +252,7 @@ def _handle_image_generation(payload):
             "error": str(e),
             "status": "error",
             "type": "image_generation_error",
-            "note": "Titan model requires specific TEXT_IMAGE format"
+            "note": "Check Titan model configuration and payload format"
         }
 
 
@@ -221,9 +269,11 @@ def _handle_image_analysis(payload):
                 "required_format": "{'type': 'image_analysis', 'text': 'description', 'image': 'base64_data'}"
             }
         
-        # Correct format for Nova Canvas multimodal
-        # Based on AWS Bedrock Nova Canvas API
-        multimodal_input = {
+        # Try different Canvas payload formats
+        logger.info(f"Attempting Canvas image analysis")
+        
+        # Format 1: Anthropic Claude format
+        canvas_payload_v1 = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 1000,
             "messages": [
@@ -247,14 +297,55 @@ def _handle_image_analysis(payload):
             ]
         }
         
-        logger.info(f"Canvas multimodal input structure prepared")
-        response = _safe_invoke_agent(canvas_agent, multimodal_input)
+        # Format 2: Simple multimodal format
+        canvas_payload_v2 = {
+            "text": text_prompt,
+            "image": image_data,
+            "image_format": payload.get('image_format', 'png')
+        }
         
+        # Format 3: Direct prompt with image reference
+        canvas_payload_v3 = f"{text_prompt}\n[Image data: {image_data[:50]}...]"
+        
+        formats_to_try = [
+            ("Anthropic Claude format", canvas_payload_v1),
+            ("Simple multimodal format", canvas_payload_v2),
+            ("Direct prompt format", canvas_payload_v3)
+        ]
+        
+        last_error = None
+        for format_name, payload_format in formats_to_try:
+            try:
+                logger.info(f"Trying Canvas {format_name}")
+                response = _safe_invoke_agent(canvas_agent, payload_format)
+                
+                # Check if response contains an error
+                if isinstance(response, dict) and "error" in response:
+                    last_error = response["error"]
+                    logger.warning(f"Canvas {format_name} failed: {last_error}")
+                    continue
+                
+                # Success case
+                return {
+                    "result": _extract_response_content(response),
+                    "model": "canvas",
+                    "status": "success",
+                    "type": "image_analysis_response",
+                    "format_used": format_name
+                }
+                
+            except Exception as e:
+                last_error = str(e)
+                logger.warning(f"Canvas {format_name} failed with exception: {e}")
+                continue
+        
+        # If all formats failed
         return {
-            "result": _extract_response_content(response),
-            "model": "canvas",
-            "status": "success",
-            "type": "image_analysis_response"
+            "error": f"All Canvas formats failed. Last error: {last_error}",
+            "status": "error",
+            "type": "image_analysis_error",
+            "attempted_formats": [f[0] for f in formats_to_try],
+            "note": "Canvas model may require specific authentication or different payload structure"
         }
         
     except Exception as e:
@@ -263,7 +354,7 @@ def _handle_image_analysis(payload):
             "error": str(e),
             "status": "error",
             "type": "image_analysis_error",
-            "note": "Canvas model requires proper multimodal message format"
+            "note": "Check Canvas model configuration and payload format"
         }
 
 
