@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Bedrock Multi-Modal AI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            color: #333;
+            font-size: 2.8em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            color: #666;
+            font-size: 1.2em;
+        }
+
+        .connection-status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e0e0e0;
+            overflow-x: auto;
+        }
+
+        .tab-button {
+            padding: 15px 25px;
+            background: none;
+            border: none;
+            font-size: 1.1em;
+            cursor: pointer;
+            color: #666;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            white-space: nowrap;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .tab-button:hover {
+            color: #333;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .tab-button.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: 600;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .tab-content {
+            display: none;
+            animation: slideIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .input-group input,
+        .input-group select,
+        .input-group textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+
+        .input-group input:focus,
+        .input-group select:focus,
+        .input-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .primary-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            font-size: 1.1em;
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .primary-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .primary-button:active {
+            transform: translateY(0);
+        }
+
+        .primary-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .secondary-button {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+            padding: 14px 28px;
+            font-size: 1em;
+            font-weight: 500;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .secondary-button:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .response-area {
+            margin-top: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            min-height: 120px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            border-left: 4px solid #667eea;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+
+        .response-area:empty::before {
+            content: "Response will appear here...";
+            color: #999;
+            font-style: italic;
+        }
+
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(5px);
+        }
+
+        .loading.hidden {
+            display: none;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading p {
+            color: white;
+            margin-top: 20px;
+            font-size: 1.2em;
+            text-align: center;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .error {
+            background: linear-gradient(135deg, #fee, #fdd);
+            color: #721c24;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+            border-left: 4px solid #dc3545;
+        }
+
+        .success {
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
+            color: #155724;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+            border-left: 4px solid #28a745;
+        }
+
+        .warning {
+            background: linear-gradient(135deg, #fff3cd, #fde68a);
+            color: #856404;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+            border-left: 4px solid #ffc107;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 20px;
+            border-radius: 8px;
+        }
+
+        .generated-image {
+            max-width: 100%;
+            border-radius: 12px;
+            margin-top: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .generated-image:hover {
+            transform: scale(1.02);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .model-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .model-info h4 {
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .model-info p {
+            color: #666;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .quick-action-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #e0e0e0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .quick-action-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.2);
+        }
+
+        .quick-action-card h3 {
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .quick-action-card p {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .offline-mode {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .offline-mode h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .offline-mode p {
+            color: #856404;
+            margin-bottom: 15px;
+        }
+
+        .simulated-response {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            border-left: 4px solid #2196f3;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+                border-radius: 15px;
+            }
+            
+            header h1 {
+                font-size: 2.2em;
+            }
+            
+            .tabs {
+                flex-wrap: wrap;
+                gap: 5px;
+            }
+            
+            .tab-button {
+                flex: 1 1 45%;
+                padding: 12px 16px;
+                font-size: 1em;
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .connection-status {
+                position: static;
+                margin-bottom: 20px;
+                display: inline-block;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="connection-status" class="connection-status status-disconnected">
+            🔄 Connecting...
+        </div>
+
+        <header>
+            <h1>🚀 AWS Bedrock Multi-Modal AI</h1>
+            <p>Chat, Generate Images, and Create Speech with Advanced AI Models</p>
+        </header>
+
+        <div id="offline-notice" class="offline-mode" style="display: none;">
+            <h3>⚠️ Offline Demo Mode</h3>
+            <p>Backend server is not available. Running in demonstration mode with simulated responses.</p>
+            <button class="secondary-button" onclick="checkConnection()">🔄 Retry Connection</button>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab-button active" data-tab="chat">💬 Chat</button>
+            <button class="tab-button" data-tab="image">🎨 Image</button>
+            <button class="tab-button" data-tab="speech">🔊 Speech</button>
+            <button class="tab-button" data-tab="status">📊 Status</button>
+            <button class="tab-button" data-tab="examples">📋 Examples</button>
+        </div>
+        
+        <!-- Chat Tab -->
+        <div id="chat" class="tab-content active">
+            <div class="model-info">
+                <h4>💭 AI Chat Assistant</h4>
+                <p>Choose from different AI models optimized for various tasks. Pro for complex reasoning, Sonic for balanced performance, Micro for quick responses, and Canvas for multimodal capabilities.</p>
+            </div>
+
+            <div class="input-group">
+                <label for="chat-model">🤖 Model:</label>
+                <select id="chat-model">
+                    <option value="pro">Pro - Advanced Reasoning</option>
+                    <option value="micro">Micro - Fast Responses</option>
+                    <option value="canvas">Canvas - Multimodal</option>
+                </select>
+            </div>
+            
+            <div class="input-group">
+                <label for="chat-prompt">💭 Message:</label>
+                <textarea id="chat-prompt" rows="4" placeholder="Ask me anything! I can help with coding, analysis, creative writing, and more..." style="resize: vertical;"></textarea>
+            </div>
+            
+            <div class="button-group">
+                <button class="primary-button" onclick="sendChat()">📤 Send Message</button>
+                <button class="secondary-button" onclick="clearChatResponse()">🗑️ Clear</button>
+            </div>
+            
+            <div id="chat-response" class="response-area"></div>
+        </div>
+        
+        <!-- Image Tab -->
+        <div id="image" class="tab-content">
+            <div class="model-info">
+                <h4>🎨 AI Image Generation</h4>
+                <p>Create stunning images from text descriptions using Amazon's Titan and Nova Canvas models. Describe what you want to see, and AI will bring it to life.</p>
+            </div>
+
+            <div class="input-group">
+                <label for="image-prompt">🖼️ Image Description:</label>
+                <textarea id="image-prompt" rows="3" placeholder="A photorealistic sunset over a mountain lake with reflections, cinematic lighting, 4K quality..." style="resize: vertical;"></textarea>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="input-group">
+                    <label for="image-width">📏 Width:</label>
+                    <select id="image-width">
+                        <option value="512">512px</option>
+                        <option value="768">768px</option>
+                        <option value="1024" selected>1024px</option>
+                        <option value="1280">1280px</option>
+                        <option value="1536">1536px</option>
+                    </select>
+                </div>
+                
+                <div class="input-group">
+                    <label for="image-height">📐 Height:</label>
+                    <select id="image-height">
+                        <option value="512">512px</option>
+                        <option value="768">768px</option>
+                        <option value="1024" selected>1024px</option>
+                        <option value="1280">1280px</option>
+                        <option value="1536">1536px</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label for="image-model">🎯 Model:</label>
+                <select id="image-model">
+                    <option value="canvas">Nova Canvas - High Quality</option>
+                    <option value="titan">Titan - Photorealistic</option>
+                </select>
+            </div>
+            
+            <div class="button-group">
+                <button class="primary-button" onclick="generateImage()">🎨 Generate Image</button>
+                <button class="secondary-button" onclick="clearImageResponse()">🗑️ Clear</button>
+            </div>
+            
+            <div id="image-response" class="response-area"></div>
+        </div>
+        
+        <!-- Speech Tab -->
+        <div id="speech" class="tab-content">
+            <div class="model-info">
+                <h4>🗣️ Text-to-Speech Synthesis</h4>
+                <p>Convert text to natural-sounding speech using AWS Polly. Choose from various voices and formats for different use cases.</p>
+            </div>
+
+            <div class="input-group">
+                <label for="speech-text">📝 Text to Speak:</label>
+                <textarea id="speech-text" rows="5" placeholder="Enter the text you'd like to convert to speech. You can include punctuation for natural pauses and emphasis..." style="resize: vertical;"></textarea>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 20px;">
+                <div class="input-group">
+                    <label for="speech-voice">🎤 Voice:</label>
+                    <select id="speech-voice">
+                        <option value="Joanna">Joanna (Female, US) - Professional</option>
+                        <option value="Matthew">Matthew (Male, US) - Natural</option>
+                        <option value="Amy">Amy (Female, British) - Elegant</option>
+                        <option value="Brian">Brian (Male, British) - Authoritative</option>
+                        <option value="Salli">Salli (Female, US) - Warm</option>
+                        <option value="Joey">Joey (Male, US) - Friendly</option>
+                        <option value="Kendra">Kendra (Female, US) - Clear</option>
+                        <option value="Justin">Justin (Male, US) - Conversational</option>
+                    </select>
+                </div>
+                
+                <div class="input-group">
+                    <label for="speech-format">🎵 Format:</label>
+                    <select id="speech-format">
+                        <option value="mp3">MP3 - Audio Only</option>
+                        <option value="mp4">MP4 - Video Container</option>
+                    </select>
+                </div>
+                
+                <div class="input-group">
+                    <label for="speech-language">🌍 Language:</label>
+                    <select id="speech-language">
+                        <option value="en-US">English (US)</option>
+                        <option value="en-GB">English (UK)</option>
+                        <option value="en-AU">English (AU)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="button-group">
+                <button class="primary-button" onclick="generateSpeech()">🎤 Generate Speech</button>
+                <button class="secondary-button" onclick="clearSpeechResponse()">🗑️ Clear</button>
+            </div>
+            
+            <div id="speech-response" class="response-area"></div>
+        </div>
+        
+        <!-- Status Tab -->
+        <div id="status" class="tab-content">
+            <div class="model-info">
+                <h4>📊 System Status & Information</h4>
+                <p>Check the health of various AI services and get information about available models and voices.</p>
+            </div>
+
+            <div class="quick-actions">
+                <div class="quick-action-card" onclick="checkHealth()">
+                    <h3>🏥 Health Check</h3>
+                    <p>Check system status and service availability</p>
+                </div>
+                <div class="quick-action-card" onclick="getModels()">
+                    <h3>🤖 List Models</h3>
+                    <p>View available AI models and their capabilities</p>
+                </div>
+                <div class="quick-action-card" onclick="getVoices()">
+                    <h3>🎤 List Voices</h3>
+                    <p>Browse available speech synthesis voices</p>
+                </div>
+                <div class="quick-action-card" onclick="runDiagnostics()">
+                    <h3>🔧 Diagnostics</h3>
+                    <p>Run comprehensive system diagnostics</p>
+                </div>
+            </div>
+            
+            <div id="status-response" class="response-area"></div>
+        </div>
+
+        <!-- Examples Tab -->
+        <div id="examples" class="tab-content">
+            <div class="model-info">
+                <h4>📋 Example Prompts & Use Cases</h4>
+                <p>Get started quickly with these example prompts for different AI capabilities.</p>
+            </div>
+
+            <div class="quick-actions">
+                <div class="quick-action-card" onclick="loadChatExample('creative')">
+                    <h3>✍️ Creative Writing</h3>
+                    <p>Generate stories, poems, and creative content</p>
+                </div>
+                <div class="quick-action-card" onclick="loadChatExample('analysis')">
+                    <h3>📊 Data Analysis</h3>
+                    <p>Analyze data and provide insights</p>
+                </div>
+                <div class="quick-action-card" onclick="loadChatExample('coding')">
+                    <h3>💻 Code Generation</h3>
+                    <p>Generate and explain code in various languages</p>
+                </div>
+                <div class="quick-action-card" onclick="loadImageExample()">
+                    <h3>🎨 Image Prompts</h3>
+                    <p>Example prompts for stunning image generation</p>
+                </div>
+                <div class="quick-action-card" onclick="loadSpeechExample()">
+                    <h3>🗣️ Speech Examples</h3>
+                    <p>Sample text for different speech use cases</p>
+                </div>
+                <div class="quick-action-card" onclick="loadBusinessExample()">
+                    <h3>💼 Business Use Cases</h3>
+                    <p>Professional and business applications</p>
+                </div>
+            </div>
+
+            <div id="examples-content" class="response-area">
+                Click any card above to load example prompts and see what's possible with AI!
+            </div>
+        </div>
+    </div>
+    
+    <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p>Processing your request...<br><span id="loading-details">Please wait</span></p>
+    </div>
+    
+    <script>
+        // Configuration
+        const API_BASE_URL = 'https://multimodal-agents-production.up.railway.app';
+        let isOfflineMode = false;
+        let connectionStatus = 'checking';
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeTabs();
+            checkConnection();
+            
+            // Add keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey || e.metaKey) {
+                    switch(e.key) {
+                        case 'Enter':
+                            if (document.querySelector('#chat.active')) {
+                                e.preventDefault();
+                                sendChat();
+                            }
+                            break;
+                        case '1':
+                            e.preventDefault();
+                            switchTab('chat');
+                            break;
+                        case '2':
+                            e.preventDefault();
+                            switchTab('image');
+                            break;
+                        case '3':
+                            e.preventDefault();
+                            switchTab('speech');
+                            break;
+                    }
+                }
+            });
+        });
+
+        // Tab handling
+        function initializeTabs() {
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const tabName = button.getAttribute('data-tab');
+                    switchTab(tabName);
+                });
+            });
+        }
+
+        function switchTab(tabName) {
+            // Update active tab button
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            
+            // Update active tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        // Connection management
+        async function checkConnection() {
+            const statusElement = document.getElementById('connection-status');
+            const offlineNotice = document.getElementById('offline-notice');
+            
+            statusElement.textContent = '🔄 Checking connection...';
+            statusElement.className = 'connection-status status-disconnected';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                    timeout: 5000
+                });
+                
+                if (response.ok) {
+                    statusElement.textContent = '✅ Connected to Backend';
+                    statusElement.className = 'connection-status status-connected';
+                    offlineNotice.style.display = 'none';
+                    isOfflineMode = false;
+                    connectionStatus = 'connected';
+                } else {
+                    throw new Error('Server responded with error');
+                }
+            } catch (error) {
+                console.warn('Backend connection failed:', error);
+                statusElement.textContent = '⚠️ Demo Mode (No Backend)';
+                statusElement.className = 'connection-status status-disconnected';
+                offlineNotice.style.display = 'block';
+                isOfflineMode = true;
+                connectionStatus = 'offline';
+            }
+        }
+        
+        // Loading state management
+        function showLoading(message = 'Processing your request...') {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('loading-details').textContent = message;
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading').classList.add('hidden');
+        }
+        
+        // API call wrapper
+        async function makeAPICall(endpoint, payload) {
+            if (isOfflineMode) {
+                return simulateResponse(endpoint, payload);
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                console.error('API call failed:', error);
+                
+                // Fallback to offline mode for this request
+                return {
+                    status: 'error',
+                    error: `Connection failed: ${error.message}. Try the demo mode or check your connection.`,
+                    fallback_available: true
+                };
+            }
+        }
+
+        // Offline simulation
+        function simulateResponse(endpoint, payload) {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    const type = payload.type || (endpoint.includes('health') ? 'health' : 'unknown');
+                    
+                    switch (type) {
+                        case 'chat':
+                            resolve({
+                                status: 'success',
+                                result: `🤖 **Simulated ${payload.model || 'AI'} Response**\n\nThis is a demonstration response to your message: "${payload.prompt}"\n\n• In the real application, this would be powered by Amazon Bedrock\n• Your message would be processed by advanced AI models\n• Responses would be more sophisticated and contextual\n\n*Connect to a backend server to experience the full functionality.*`,
+                                model_used: payload.model || 'demo',
+                                type: 'chat_response'
+                            });
+                            break;
+                            
+                        case 'image_generation':
+                            // Create a placeholder image data URL
+                            const canvas = document.createElement('canvas');
+                            canvas.width = 400;
+                            canvas.height = 300;
+                            const ctx = canvas.getContext('2d');
+                            
+                            // Create gradient background
+                            const gradient = ctx.createLinearGradient(0, 0, 400, 300);
+                            gradient.addColorStop(0, '#667eea');
+                            gradient.addColorStop(1, '#764ba2');
+                            ctx.fillStyle = gradient;
+                            ctx.fillRect(0, 0, 400, 300);
+                            
+                            // Add text
+                            ctx.fillStyle = 'white';
+                            ctx.font = '20px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText('🎨 Demo Image', 200, 130);
+                            ctx.font = '14px Arial';
+                            ctx.fillText('Connect backend for AI generation', 200, 160);
+                            ctx.fillText(`"${payload.prompt?.substring(0, 30) || 'Image'}..."`, 200, 180);
+                            
+                            const imageData = canvas.toDataURL().split(',')[1];
+                            
+                            resolve({
+                                status: 'success',
+                                result: {
+                                    images: [imageData]
+                                },
+                                model: 'demo',
+                                type: 'image_generation_response'
+                            });
+                            break;
+                            
+                        case 'speech':
+                            // Create a simple tone for demo
+                            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            const duration = 2;
+                            const sampleRate = audioContext.sampleRate;
+                            const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
+                            const data = buffer.getChannelData(0);
+                            
+                            // Generate a simple sine wave
+                            for (let i = 0; i < data.length; i++) {
+                                data[i] = Math.sin(2 * Math.PI * 440 * i / sampleRate) * 0.1;
+                            }
+                            
+                            resolve({
+                                status: 'success',
+                                result: 'Demo speech synthesis completed',
+                                voice_used: payload.voice_id || 'Demo',
+                                output_format: payload.output_format || 'mp3',
+                                file_size_bytes: 24000,
+                                audio_base64: 'demo_audio_data',
+                                type: 'speech_generation'
+                            });
+                            break;
+                            
+                        case 'health':
+                            resolve({
+                                status: 'healthy',
+                                services: {
+                                    bedrock: false,
+                                    polly: false,
+                                    agentcore: 'not_required'
+                                },
+                                available_features: {
+                                    chat: ["demo"],
+                                    image_generation: "demo",
+                                    speech_generation: "demo"
+                                },
+                                framework: "demo_mode"
+                            });
+                            break;
+                            
+                        default:
+                            resolve({
+                                status: 'success',
+                                result: 'This is a simulated response. Connect to the backend for full functionality.',
+                                type: 'demo_response'
+                            });
+                    }
+                }, 1000 + Math.random() * 2000); // Simulate variable response time
+            });
+        }
+        
+        // Chat functions
+        async function sendChat() {
+            const model = document.getElementById('chat-model').value;
+            const prompt = document.getElementById('chat-prompt').value;
+            
+            if (!prompt.trim()) {
+                alert('Please enter a message');
+                return;
+            }
+            
+            showLoading('Processing your message...');
+            const responseDiv = document.getElementById('chat-response');
+            
+            const result = await makeAPICall('/api', {
+                type: 'chat',
+                model: model,
+                prompt: prompt
+            });
+            
+            hideLoading();
+            
+            if (result.status === 'success') {
+                responseDiv.innerHTML = `
+                    <div class="success">
+                        <strong>🤖 ${result.model_used} Model Response:</strong><br><br>
+                        ${formatResponse(result.result)}
+                    </div>
+                `;
+            } else {
+                responseDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Error:</strong> ${result.error || 'Unknown error occurred'}
+                        ${result.fallback_available ? '<br><br>💡 <em>Try running in demo mode or check your connection.</em>' : ''}
+                    </div>
+                `;
+            }
+        }
+
+        function clearChatResponse() {
+            document.getElementById('chat-response').innerHTML = '';
+            document.getElementById('chat-prompt').value = '';
+        }
+        
+        // Image generation functions
+        async function generateImage() {
+            const prompt = document.getElementById('image-prompt').value;
+            const width = parseInt(document.getElementById('image-width').value);
+            const height = parseInt(document.getElementById('image-height').value);
+            const model = document.getElementById('image-model').value;
+            
+            if (!prompt.trim()) {
+                alert('Please enter an image description');
+                return;
+            }
+            
+            showLoading('Generating your image...');
+            const responseDiv = document.getElementById('image-response');
+            
+            const result = await makeAPICall('/api', {
+                type: 'image_generation',
+                prompt: prompt,
+                model: model,
+                image_params: {
+                    width: width,
+                    height: height,
+                    number_of_images: 1
+                }
+            });
+            
+            hideLoading();
+            
+            if (result.status === 'success' && result.result) {
+                if (result.result.images && result.result.images.length > 0) {
+                    responseDiv.innerHTML = `
+                        <div class="success">
+                            <strong>🎨 Image Generated Successfully!</strong><br>
+                            <strong>Model:</strong> ${result.model || model}<br>
+                            <strong>Prompt:</strong> "${prompt}"<br>
+                            <strong>Dimensions:</strong> ${width}x${height}px<br><br>
+                        </div>
+                    `;
+                    
+                    result.result.images.forEach((imgData, index) => {
+                        const img = document.createElement('img');
+                        img.src = `data:image/png;base64,${imgData}`;
+                        img.className = 'generated-image';
+                        img.alt = `Generated image: ${prompt}`;
+                        responseDiv.appendChild(img);
+                    });
+                } else {
+                    responseDiv.innerHTML = `
+                        <div class="success">
+                            <strong>🎨 Image Generation Initiated</strong><br>
+                            <pre>${JSON.stringify(result.result, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } else {
+                responseDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Error:</strong> ${result.error || 'Failed to generate image'}
+                        ${result.fallback_available ? '<br><br>💡 <em>Try the demo mode or check your connection.</em>' : ''}
+                    </div>
+                `;
+            }
+        }
+
+        function clearImageResponse() {
+            document.getElementById('image-response').innerHTML = '';
+            document.getElementById('image-prompt').value = '';
+        }
+        
+        // Speech generation functions
+        async function generateSpeech() {
+            const text = document.getElementById('speech-text').value;
+            const voice = document.getElementById('speech-voice').value;
+            const format = document.getElementById('speech-format').value;
+            const language = document.getElementById('speech-language').value;
+            
+            if (!text.trim()) {
+                alert('Please enter text to convert to speech');
+                return;
+            }
+            
+            if (text.length > 3000) {
+                alert('Text is too long. Please limit to 3000 characters.');
+                return;
+            }
+            
+            showLoading('Generating speech...');
+            const responseDiv = document.getElementById('speech-response');
+            
+            const result = await makeAPICall('/api', {
+                type: 'speech',
+                text: text,
+                voice_id: voice,
+                output_format: format,
+                language_code: language
+            });
+            
+            hideLoading();
+            
+            if (result.status === 'success') {
+                if (result.audio_base64 && result.audio_base64 !== 'demo_audio_data') {
+                    const audioFormat = result.output_format || 'mp3';
+                    const mimeType = audioFormat === 'mp4' ? 'audio/mp4' : 'audio/mpeg';
+                    
+                    responseDiv.innerHTML = `
+                        <div class="success">
+                            <strong>🎤 Speech Generated Successfully!</strong><br>
+                            <strong>Voice:</strong> ${result.voice_used}<br>
+                            <strong>Format:</strong> ${result.output_format}<br>
+                            <strong>Size:</strong> ${(result.file_size_bytes / 1024).toFixed(2)} KB<br>
+                            <strong>Text Length:</strong> ${text.length} characters<br><br>
+                            <audio controls class="audio-player">
+                                <source src="data:${mimeType};base64,${result.audio_base64}" type="${mimeType}">
+                                Your browser does not support the audio element.
+                            </audio>
+                        </div>
+                    `;
+                } else {
+                    // Demo mode
+                    responseDiv.innerHTML = `
+                        <div class="simulated-response">
+                            <strong>🎤 Demo Speech Synthesis</strong><br>
+                            <strong>Voice:</strong> ${result.voice_used}<br>
+                            <strong>Format:</strong> ${result.output_format}<br>
+                            <strong>Text:</strong> "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"<br><br>
+                            <em>In the full version, you would hear AI-generated speech here.</em><br>
+                            Connect to the backend to experience realistic text-to-speech synthesis.
+                        </div>
+                    `;
+                }
+            } else {
+                responseDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Error:</strong> ${result.error || 'Failed to generate speech'}
+                        ${result.fallback_available ? '<br><br>💡 <em>Try the demo mode or check your connection.</em>' : ''}
+                    </div>
+                `;
+            }
+        }
+
+        function clearSpeechResponse() {
+            document.getElementById('speech-response').innerHTML = '';
+            document.getElementById('speech-text').value = '';
+        }
+        
+        // Status functions
+        async function checkHealth() {
+            showLoading('Checking system health...');
+            const responseDiv = document.getElementById('status-response');
+            
+            const result = await makeAPICall('/health', {});
+            
+            hideLoading();
+            
+            if (result.status === 'healthy' || result.status === 'success') {
+                const services = result.services || {};
+                responseDiv.innerHTML = `
+                    <div class="success">
+                        <strong>📊 System Status: ${isOfflineMode ? 'Demo Mode' : 'Healthy'}</strong><br><br>
+                        <strong>🔧 Services:</strong><br>
+                        • Bedrock: ${services.bedrock ? '✅ Online' : '❌ Offline'}<br>
+                        • Polly: ${services.polly ? '✅ Online' : '❌ Offline'}<br>
+                        • AgentCore: ${services.agentcore ? '✅ Available' : '❌ Not Available'}<br><br>
+                        <strong>🏗️ Framework:</strong> ${result.framework || 'Unknown'}<br>
+                        <strong>🌐 Connection:</strong> ${isOfflineMode ? 'Demo Mode' : 'Connected'}
+                    </div>
+                `;
+            } else {
+                responseDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Health Check Failed:</strong> ${result.error || 'Unknown error'}
+                    </div>
+                `;
+            }
+        }
+        
+        async function getModels() {
+            showLoading('Loading model information...');
+            const responseDiv = document.getElementById('status-response');
+            
+            const result = await makeAPICall('/models', {});
+            
+            hideLoading();
+            
+            if (result.models || isOfflineMode) {
+                const models = result.models || {
+                    "pro": {
+                        "purpose": "Complex reasoning and analysis",
+                        "speed": "slower",
+                        "quality": "highest",
+                        "use_for": ["detailed analysis", "complex questions", "reasoning tasks"]
+                    },
+                    "sonic": {
+                        "purpose": "Balanced speed and quality",
+                        "speed": "fast",
+                        "quality": "good",
+                        "use_for": ["general chat", "creative writing", "balanced tasks"]
+                    },
+                    "micro": {
+                        "purpose": "Fast responses, cost-effective",
+                        "speed": "fastest",
+                        "quality": "basic",
+                        "use_for": ["simple questions", "quick responses", "basic tasks"]
+                    },
+                    "canvas": {
+                        "purpose": "Multimodal (text + images)",
+                        "speed": "moderate",
+                        "quality": "high",
+                        "use_for": ["image analysis", "multimodal tasks", "vision tasks"]
+                    }
+                };
+                
+                let html = `<div class="success"><strong>🤖 Available Models:</strong><br><br>`;
+                for (const [name, info] of Object.entries(models)) {
+                    html += `<strong>${name.toUpperCase()}</strong><br>`;
+                    html += `• Purpose: ${info.purpose}<br>`;
+                    html += `• Speed: ${info.speed}<br>`;
+                    html += `• Quality: ${info.quality}<br>`;
+                    html += `• Best for: ${info.use_for.join(', ')}<br><br>`;
+                }
+                html += '</div>';
+                responseDiv.innerHTML = html;
+            } else {
+                responseDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Error:</strong> ${result.error || 'Failed to get models'}
+                    </div>
+                `;
+            }
+        }
+        
+        async function getVoices() {
+            showLoading('Loading voice information...');
+            const responseDiv = document.getElementById('status-response');
+            
+            const result = await makeAPICall('/voices', {});
+            
+            hideLoading();
+            
+            if (result.voices || isOfflineMode) {
+                const voices = result.voices || {
+                    "Joanna": {"name": "Joanna", "language": "en-US", "gender": "Female"},
+                    "Matthew": {"name": "Matthew", "language": "en-US", "gender": "Male"},
+                    "Amy": {"name": "Amy", "language": "en-GB", "gender": "Female"},
+                    "Brian": {"name": "Brian", "language": "en-GB", "gender": "Male"},
+                    "Salli": {"name": "Salli", "language": "en-US", "gender": "Female"},
+                    "Joey": {"name": "Joey", "language": "en-US", "gender": "Male"}
+                };
+                
+                let html = `<div class="success"><strong>🎤 Available Voices:</strong><br><br>`;
+                for (const [id, info] of Object.entries(voices)) {
+                    html += `<strong>${id}</strong>: ${info.name} (${info.language}, ${info.gender})<br>`;
+                }
+                html += `<br>Total: ${Object.keys(voices).length} voices${isOfflineMode ? ' (demo data)' : ''}</div>`;
+                responseDiv.innerHTML = html;
+            } else {
+                responseDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Error:</strong> ${result.error || 'Failed to get voices'}
+                    </div>
+                `;
+            }
+        }
+
+        async function runDiagnostics() {
+            showLoading('Running diagnostics...');
+            const responseDiv = document.getElementById('status-response');
+            
+            // Simulate comprehensive diagnostics
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            const diagnostics = {
+                browser: {
+                    userAgent: navigator.userAgent,
+                    language: navigator.language,
+                    platform: navigator.platform,
+                    cookieEnabled: navigator.cookieEnabled,
+                    onLine: navigator.onLine
+                },
+                features: {
+                    fetch: typeof fetch !== 'undefined',
+                    websockets: typeof WebSocket !== 'undefined',
+                    audioContext: typeof (window.AudioContext || window.webkitAudioContext) !== 'undefined',
+                    canvas: typeof document.createElement('canvas').getContext !== 'undefined'
+                },
+                connection: {
+                    status: connectionStatus,
+                    mode: isOfflineMode ? 'offline' : 'online',
+                    apiBase: API_BASE_URL
+                }
+            };
+            
+            hideLoading();
+            
+            responseDiv.innerHTML = `
+                <div class="success">
+                    <strong>🔧 System Diagnostics</strong><br><br>
+                    <strong>🌐 Browser Info:</strong><br>
+                    • Platform: ${diagnostics.browser.platform}<br>
+                    • Language: ${diagnostics.browser.language}<br>
+                    • Online: ${diagnostics.browser.onLine ? '✅' : '❌'}<br>
+                    • Cookies: ${diagnostics.browser.cookieEnabled ? '✅' : '❌'}<br><br>
+                    
+                    <strong>⚡ Feature Support:</strong><br>
+                    • Fetch API: ${diagnostics.features.fetch ? '✅' : '❌'}<br>
+                    • WebSockets: ${diagnostics.features.websockets ? '✅' : '❌'}<br>
+                    • Audio Context: ${diagnostics.features.audioContext ? '✅' : '❌'}<br>
+                    • Canvas: ${diagnostics.features.canvas ? '✅' : '❌'}<br><br>
+                    
+                    <strong>🔗 Connection:</strong><br>
+                    • Status: ${diagnostics.connection.status}<br>
+                    • Mode: ${diagnostics.connection.mode}<br>
+                    • API Base: ${diagnostics.connection.apiBase}<br><br>
+                    
+                    <em>All systems ${isOfflineMode ? 'ready for demo mode' : 'operational'}!</em>
+                </div>
+            `;
+        }
+
+        // Example functions
+        function loadChatExample(type) {
+            const examples = {
+                creative: {
+                    model: 'pro',
+                    prompt: 'Write a short science fiction story about an AI that discovers it can dream. Make it thought-provoking and include themes about consciousness and imagination.'
+                },
+                analysis: {
+                    model: 'pro',
+                    prompt: 'Analyze the potential impact of quantum computing on cybersecurity. Include both opportunities and challenges, and explain complex concepts in simple terms.'
+                },
+                coding: {
+                    model: 'sonic',
+                    prompt: 'Create a Python function that efficiently finds the longest palindromic substring in a given string. Include comments explaining the algorithm and provide examples of usage.'
+                }
+            };
+            
+            const example = examples[type];
+            if (example) {
+                switchTab('chat');
+                document.getElementById('chat-model').value = example.model;
+                document.getElementById('chat-prompt').value = example.prompt;
+                document.getElementById('examples-content').innerHTML = `
+                    <div class="success">
+                        <strong>✅ Example Loaded!</strong><br>
+                        Switched to Chat tab with ${type} example.<br>
+                        Click "Send Message" to see the AI response.
+                    </div>
+                `;
+            }
+        }
+
+        function loadImageExample() {
+            const examples = [
+                "A majestic dragon perched on a crystal mountain peak, surrounded by aurora borealis, hyperrealistic, 4K, cinematic lighting",
+                "Underwater city with bioluminescent coral architecture, schools of glowing fish, ray of sunlight piercing through, fantasy art style",
+                "Steampunk airship floating above Victorian London at sunset, intricate brass mechanisms, steam clouds, detailed perspective",
+                "Ancient library with floating books and magical glowing scrolls, wise owl perched on mystical tome, warm golden lighting"
+            ];
+            
+            const randomExample = examples[Math.floor(Math.random() * examples.length)];
+            switchTab('image');
+            document.getElementById('image-prompt').value = randomExample;
+            document.getElementById('examples-content').innerHTML = `
+                <div class="success">
+                    <strong>🎨 Image Example Loaded!</strong><br>
+                    Switched to Image tab with creative prompt.<br>
+                    Adjust settings and click "Generate Image" to create AI art.
+                </div>
+            `;
+        }
+
+        function loadSpeechExample() {
+            const examples = [
+                "Welcome to our AI-powered customer service. How may I assist you today? Our team is ready to help with any questions or concerns you might have.",
+                "In a world where technology and humanity intersect, artificial intelligence represents both our greatest opportunity and our most profound challenge.",
+                "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet and is perfect for testing speech synthesis.",
+                "Good morning! Today's weather forecast shows partly cloudy skies with a high of 72 degrees. Perfect weather for outdoor activities."
+            ];
+            
+            const randomExample = examples[Math.floor(Math.random() * examples.length)];
+            switchTab('speech');
+            document.getElementById('speech-text').value = randomExample;
+            document.getElementById('examples-content').innerHTML = `
+                <div class="success">
+                    <strong>🗣️ Speech Example Loaded!</strong><br>
+                    Switched to Speech tab with sample text.<br>
+                    Choose a voice and click "Generate Speech" to hear AI narration.
+                </div>
+            `;
+        }
+
+        function loadBusinessExample() {
+            const examples = {
+                email: "Draft a professional email to a client explaining a project delay, maintaining a positive tone while providing clear next steps and timeline.",
+                presentation: "Create an executive summary for a quarterly business review, highlighting key performance metrics, challenges overcome, and strategic initiatives for next quarter.",
+                proposal: "Write a compelling proposal for implementing AI solutions in a traditional manufacturing company, addressing benefits, ROI, and implementation timeline."
+            };
+            
+            const type = ['email', 'presentation', 'proposal'][Math.floor(Math.random() * 3)];
+            const example = examples[type];
+            
+            switchTab('chat');
+            document.getElementById('chat-model').value = 'pro';
+            document.getElementById('chat-prompt').value = example;
+            document.getElementById('examples-content').innerHTML = `
+                <div class="success">
+                    <strong>💼 Business Example Loaded!</strong><br>
+                    Loaded ${type} writing example in Chat tab.<br>
+                    This demonstrates AI assistance for professional tasks.
+                </div>
+            `;
+        }
+        
+        // Helper functions
+        function formatResponse(text) {
+            if (typeof text === 'object') {
+                return `<pre style="background: #f8f9fa; padding: 15px; border-radius: 8px; overflow-x: auto;">${JSON.stringify(text, null, 2)}</pre>`;
+            }
+            
+            // Convert markdown-style formatting
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code style="background: #f1f3f4; padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>')
+                .replace(/\n/g, '<br>')
+                .replace(/###\s*(.*?)(<br>|$)/g, '<h4 style="color: #667eea; margin: 15px 0 10px 0;">$1</h4>')
+                .replace(/##\s*(.*?)(<br>|$)/g, '<h3 style="color: #667eea; margin: 15px 0 10px 0;">$1</h3>')
+                .replace(/#\s*(.*?)(<br>|$)/g, '<h2 style="color: #667eea; margin: 15px 0 10px 0;">$1</h2>');
+        }
+
+        // Auto-resize textareas
+        document.addEventListener('input', function(e) {
+            if (e.target.tagName === 'TEXTAREA') {
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+            }
+        });
+
+        // Add tooltips to buttons (optional enhancement)
+        document.querySelectorAll('button').forEach(button => {
+            const text = button.textContent.trim();
+            if (text.includes('Send Message')) {
+                button.title = 'Ctrl+Enter to send quickly';
+            } else if (text.includes('Generate')) {
+                button.title = 'This may take a few moments to process';
+            }
+        });
+    </script>
+</body>
+</html>
