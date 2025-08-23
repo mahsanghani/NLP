@@ -656,7 +656,7 @@
     
     <script>
         // Configuration
-        const API_BASE_URL = 'https://multimodal-agents-production.up.railway.app';
+        const API_BASE_URL = 'http://localhost:8080';
         let isOfflineMode = false;
         let connectionStatus = 'checking';
 
@@ -1262,15 +1262,15 @@
         function loadChatExample(type) {
             const examples = {
                 creative: {
-                    model: 'pro',
+                    model: 'micro',
                     prompt: 'Write a short science fiction story about an AI that discovers it can dream. Make it thought-provoking and include themes about consciousness and imagination.'
                 },
                 analysis: {
-                    model: 'pro',
+                    model: 'micro',
                     prompt: 'Analyze the potential impact of quantum computing on cybersecurity. Include both opportunities and challenges, and explain complex concepts in simple terms.'
                 },
                 coding: {
-                    model: 'sonic',
+                    model: 'micro',
                     prompt: 'Create a Python function that efficiently finds the longest palindromic substring in a given string. Include comments explaining the algorithm and provide examples of usage.'
                 }
             };
@@ -1283,7 +1283,7 @@
                 document.getElementById('examples-content').innerHTML = `
                     <div class="success">
                         <strong>✅ Example Loaded!</strong><br>
-                        Switched to Chat tab with ${type} example.<br>
+                        Switched to Chat tab with ${type} example using ${example.model.toUpperCase()} model.<br>
                         Click "Send Message" to see the AI response.
                     </div>
                 `;
@@ -1355,18 +1355,87 @@
         // Helper functions
         function formatResponse(text) {
             if (typeof text === 'object') {
-                return `<pre style="background: #f8f9fa; padding: 15px; border-radius: 8px; overflow-x: auto;">${JSON.stringify(text, null, 2)}</pre>`;
+                return `<pre style="background: #f8f9fa; padding: 15px; border-radius: 8px; overflow-x: auto; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;">${JSON.stringify(text, null, 2)}</pre>`;
             }
             
-            // Convert markdown-style formatting
-            return text
+            // Convert to string and do EXTREME cleaning
+            let cleanText = String(text);
+            
+            // NUCLEAR OPTION: Remove ALL possible CSS fragments
+            // Remove hex color codes followed by CSS properties
+            cleanText = cleanText.replace(/[a-f0-9]{4,8};\s*[a-zA-Z-]+:[^;>]*;?[^>]*>/g, '');
+            cleanText = cleanText.replace(/[a-f0-9]{4,8};\s*[^"<>]*?>/g, '');
+            cleanText = cleanText.replace(/[a-f0-9]{4,8};\s*[^"<>\n]*/g, '');
+            
+            // Remove specific problematic patterns
+            cleanText = cleanText.replace(/2563eb;\s*[^"<>\n]*/g, '');
+            cleanText = cleanText.replace(/f8f9fa;\s*[^"<>\n]*/g, '');
+            cleanText = cleanText.replace(/0366d6;\s*[^"<>\n]*/g, '');
+            cleanText = cleanText.replace(/f1f3f4;\s*[^"<>\n]*/g, '');
+            cleanText = cleanText.replace(/667eea;\s*[^"<>\n]*/g, '');
+            cleanText = cleanText.replace(/e5e7eb;\s*[^"<>\n]*/g, '');
+            
+            // Remove any remaining CSS-like patterns
+            cleanText = cleanText.replace(/style\s*=\s*"[^"]*"/gi, '');
+            cleanText = cleanText.replace(/<[^>]*style[^>]*>/gi, '');
+            cleanText = cleanText.replace(/[a-zA-Z-]+:\s*[^;]*;\s*/g, '');
+            cleanText = cleanText.replace(/font-weight:\s*[^;]*;?/g, '');
+            cleanText = cleanText.replace(/margin:\s*[^;]*;?/g, '');
+            cleanText = cleanText.replace(/padding:\s*[^;]*;?/g, '');
+            cleanText = cleanText.replace(/border[^:]*:\s*[^;]*;?/g, '');
+            
+            // Remove broken HTML tags and orphaned closing quotes
+            cleanText = cleanText.replace(/<[^>]*>(?=\w)/g, '');
+            cleanText = cleanText.replace(/>[a-f0-9]{4,6};/g, '');
+            cleanText = cleanText.replace(/^["'>]+/gm, '');
+            cleanText = cleanText.replace(/["'>]+$/gm, '');
+            
+            // Fix Python code formatting
+            cleanText = cleanText.replace(/pythondef/g, 'def');
+            cleanText = cleanText.replace(/^python\s+/gm, '');
+            
+            // Remove leading indentation from the entire text
+            const lines = cleanText.split('\n');
+            const minIndent = Math.min(...lines
+                .filter(line => line.trim().length > 0)
+                .map(line => line.match(/^\s*/)[0].length)
+            );
+            
+            if (minIndent > 0) {
+                cleanText = lines.map(line => 
+                    line.length > minIndent ? line.substring(minIndent) : line.trim()
+                ).join('\n');
+            }
+            
+            // Clean up whitespace
+            cleanText = cleanText.replace(/\n\s*\n\s*\n+/g, '\n\n');
+            cleanText = cleanText.replace(/[ \t]+/g, ' ');
+            cleanText = cleanText.trim();
+            
+            // Simple, safe HTML conversion - NO complex styling
+            return cleanText
+                // Convert headings (minimal styling)
+                .replace(/###\s*(.*?)(?=\n|$)/g, '<h4><strong>$1</strong></h4>')
+                .replace(/##\s*(.*?)(?=\n|$)/g, '<h3><strong>$1</strong></h3>')
+                .replace(/#\s*(.*?)(?=\n|$)/g, '<h2><strong>$1</strong></h2>')
+                
+                // Convert code blocks (minimal styling)
+                .replace(/```python\n([\s\S]*?)\n```/g, '<div style="background: #f5f5f5; padding: 12px; margin: 12px 0; border-radius: 4px; overflow-x: auto;"><pre>$1</pre></div>')
+                .replace(/```([\s\S]*?)```/g, '<div style="background: #f5f5f5; padding: 12px; margin: 12px 0; border-radius: 4px; overflow-x: auto;"><pre>$1</pre></div>')
+                
+                // Convert inline code (minimal styling)
+                .replace(/`([^`\n]+)`/g, '<code style="background: #f0f0f0; padding: 2px 4px;">$1</code>')
+                
+                // Convert text formatting
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`(.*?)`/g, '<code style="background: #f1f3f4; padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>')
+                
+                // Convert line breaks
                 .replace(/\n/g, '<br>')
-                .replace(/###\s*(.*?)(<br>|$)/g, '<h4 style="color: #667eea; margin: 15px 0 10px 0;">$1</h4>')
-                .replace(/##\s*(.*?)(<br>|$)/g, '<h3 style="color: #667eea; margin: 15px 0 10px 0;">$1</h3>')
-                .replace(/#\s*(.*?)(<br>|$)/g, '<h2 style="color: #667eea; margin: 15px 0 10px 0;">$1</h2>');
+                
+                // Convert lists (simple approach)
+                .replace(/^•\s+(.*)$/gm, '• $1<br>')
+                .replace(/^(\d+)\.\s+(.*)$/gm, '$1. $2<br>');
         }
 
         // Auto-resize textareas
