@@ -71,7 +71,7 @@
             gap: 10px;
             margin-bottom: 30px;
             border-bottom: 2px solid #e0e0e0;
-            overflow-x: auto;
+            /* overflow: auto; */
         }
 
         .tab-button {
@@ -749,7 +749,7 @@
                 });
                 
                 if (response.ok) {
-                    statusElement.textContent = '✅ Connected to Backend';
+                    statusElement.textContent = '✅';
                     statusElement.className = 'connection-status status-connected';
                     offlineNotice.style.display = 'none';
                     isOfflineMode = false;
