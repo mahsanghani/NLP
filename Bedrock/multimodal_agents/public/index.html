@@ -684,33 +684,7 @@
             // Add keyboard shortcuts
             document.addEventListener('keydown', function(e) {
                 // Existing shortcuts
-                if (e.ctrlKey || e.metaKey) {
-                    switch(e.key) {
-                        case '1':
-                            e.preventDefault();
-                            switchTab('chat');
-                            break;
-                        case '2':
-                            e.preventDefault();
-                            switchTab('image');
-                            break;
-                        case '3':
-                            e.preventDefault();
-                            switchTab('speech');
-                            break;
-                        case '4':
-                            e.preventDefault();
-                            switchTab('status');
-                            break;
-                        case '5':
-                            e.preventDefault();
-                            switchTab('examples');
-                            break;
-                    }
-                }
-                
-                // NEW: Enhanced Alt shortcuts for better navigation
-                if (e.altKey) {
+                if (e.ctrlKey || e.metaKey || e.altKey) {
                     switch(e.key) {
                         case '1':
                             e.preventDefault();
