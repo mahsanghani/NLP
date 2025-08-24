@@ -683,14 +683,9 @@
             
             // Add keyboard shortcuts
             document.addEventListener('keydown', function(e) {
+                // Existing shortcuts
                 if (e.ctrlKey || e.metaKey) {
                     switch(e.key) {
-                        case 'Enter':
-                            if (document.querySelector('#chat.active')) {
-                                e.preventDefault();
-                                sendChat();
-                            }
-                            break;
                         case '1':
                             e.preventDefault();
                             switchTab('chat');
@@ -703,7 +698,46 @@
                             e.preventDefault();
                             switchTab('speech');
                             break;
+                        case '4':
+                            e.preventDefault();
+                            switchTab('status');
+                            break;
+                        case '5':
+                            e.preventDefault();
+                            switchTab('examples');
+                            break;
                     }
+                }
+                
+                // NEW: Enhanced Alt shortcuts for better navigation
+                if (e.altKey) {
+                    switch(e.key) {
+                        case '1':
+                            e.preventDefault();
+                            switchTab('chat');
+                            break;
+                        case '2':
+                            e.preventDefault();
+                            switchTab('image');
+                            break;
+                        case '3':
+                            e.preventDefault();
+                            switchTab('speech');
+                            break;
+                        case '4':
+                            e.preventDefault();
+                            switchTab('status');
+                            break;
+                        case '5':
+                            e.preventDefault();
+                            switchTab('examples');
+                            break;
+                    }
+                }
+                
+                // NEW: Escape key to close loading overlay
+                if (e.key === 'Escape' && !document.getElementById('loading').classList.contains('hidden')) {
+                    hideLoading();
                 }
             });
         });
@@ -1544,7 +1578,7 @@
                     }
                 }
             }
-        }, 300000); // 5 minutes
+        }, 300000); // Check every 5 minutes
 
         // Service worker registration for offline functionality (optional)
         if ('serviceWorker' in navigator) {
