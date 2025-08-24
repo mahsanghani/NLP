@@ -19,7 +19,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 900px;
             margin: 0 auto;
             background: rgba(255, 255, 255, 0.95);
             border-radius: 20px;
@@ -75,7 +75,8 @@
         }
 
         .tab-button {
-            padding: 15px 25px;
+            padding: 12px 24px;
+            /* padding: 15px 25px; */
             background: none;
             border: none;
             font-size: 1.1em;
@@ -90,14 +91,14 @@
 
         .tab-button:hover {
             color: #333;
-            background: rgba(102, 126, 234, 0.1);
+            /* background: rgba(102, 126, 234, 0.1); */
         }
 
         .tab-button.active {
             color: #667eea;
             border-bottom-color: #667eea;
             font-weight: 600;
-            background: rgba(102, 126, 234, 0.1);
+            /* background: rgba(102, 126, 234, 0.1); */
         }
 
         .tab-content {
@@ -198,12 +199,13 @@
             background: #f8f9fa;
             border-radius: 12px;
             min-height: 120px;
-            white-space: pre-wrap;
+            white-space: nowrap;
             word-wrap: break-word;
             border-left: 4px solid #667eea;
             font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
             font-size: 0.95em;
             line-height: 1.5;
+            text-indent: 0;
         }
 
         .response-area:empty::before {
@@ -656,7 +658,7 @@
     
     <script>
         // Configuration
-        const API_BASE_URL = 'http://localhost:8080';
+        const API_BASE_URL = 'https://multimodal-agents-production.up.railway.app/';
         let isOfflineMode = false;
         let connectionStatus = 'checking';
 
@@ -920,8 +922,8 @@
             if (result.status === 'success') {
                 responseDiv.innerHTML = `
                     <div class="success">
-                        <strong>🤖 ${result.model_used} Model Response:</strong><br><br>
-                        ${formatResponse(result.result)}
+                        <div style="text-align: left;"><strong>🤖 ${result.model_used.toUpperCase()} Model Response:</strong></div><br>
+                        <div style="margin-left: 0; text-indent: 0;">${formatResponse(result.result)}</div>
                     </div>
                 `;
             } else {
@@ -1235,8 +1237,8 @@
             
             responseDiv.innerHTML = `
                 <div class="success">
-                    <strong>🔧 System Diagnostics</strong><br><br>
-                    <strong>🌐 Browser Info:</strong><br>
+                    <div style="text-align: left;"><strong>🔧 System Diagnostics</strong></div><br>
+                    <div style="text-align: left;"><strong>🌐 Browser Info:</strong><br>
                     • Platform: ${diagnostics.browser.platform}<br>
                     • Language: ${diagnostics.browser.language}<br>
                     • Online: ${diagnostics.browser.onLine ? '✅' : '❌'}<br>
@@ -1253,7 +1255,7 @@
                     • Mode: ${diagnostics.connection.mode}<br>
                     • API Base: ${diagnostics.connection.apiBase}<br><br>
                     
-                    <em>All systems ${isOfflineMode ? 'ready for demo mode' : 'operational'}!</em>
+                    <em>All systems ${isOfflineMode ? 'ready for demo mode' : 'operational'}!</em></div>
                 </div>
             `;
         }
@@ -1282,9 +1284,9 @@
                 document.getElementById('chat-prompt').value = example.prompt;
                 document.getElementById('examples-content').innerHTML = `
                     <div class="success">
-                        <strong>✅ Example Loaded!</strong><br>
-                        Switched to Chat tab with ${type} example using ${example.model.toUpperCase()} model.<br>
-                        Click "Send Message" to see the AI response.
+                        <div style="text-align: left;"><strong>✅ Example Loaded!</strong></div><br>
+                        <div style="text-align: left;">Switched to Chat tab with ${type} example using ${example.model.toUpperCase()} model.<br>
+                        Click "Send Message" to see the AI response.</div>
                     </div>
                 `;
             }
@@ -1303,9 +1305,9 @@
             document.getElementById('image-prompt').value = randomExample;
             document.getElementById('examples-content').innerHTML = `
                 <div class="success">
-                    <strong>🎨 Image Example Loaded!</strong><br>
-                    Switched to Image tab with creative prompt.<br>
-                    Adjust settings and click "Generate Image" to create AI art.
+                    <div style="text-align: left;"><strong>🎨 Image Example Loaded!</strong></div><br>
+                    <div style="text-align: left;">Switched to Image tab with creative prompt.<br>
+                    Adjust settings and click "Generate Image" to create AI art.</div>
                 </div>
             `;
         }
@@ -1323,9 +1325,9 @@
             document.getElementById('speech-text').value = randomExample;
             document.getElementById('examples-content').innerHTML = `
                 <div class="success">
-                    <strong>🗣️ Speech Example Loaded!</strong><br>
-                    Switched to Speech tab with sample text.<br>
-                    Choose a voice and click "Generate Speech" to hear AI narration.
+                    <div style="text-align: left;"><strong>🗣️ Speech Example Loaded!</strong></div><br>
+                    <div style="text-align: left;">Switched to Speech tab with sample text.<br>
+                    Choose a voice and click "Generate Speech" to hear AI narration.</div>
                 </div>
             `;
         }
@@ -1345,9 +1347,9 @@
             document.getElementById('chat-prompt').value = example;
             document.getElementById('examples-content').innerHTML = `
                 <div class="success">
-                    <strong>💼 Business Example Loaded!</strong><br>
-                    Loaded ${type} writing example in Chat tab.<br>
-                    This demonstrates AI assistance for professional tasks.
+                    <div style="text-align: left;"><strong>💼 Business Example Loaded!</strong></div><br>
+                    <div style="text-align: left;">Loaded ${type} writing example in Chat tab.<br>
+                    This demonstrates AI assistance for professional tasks.</div>
                 </div>
             `;
         }
@@ -1394,36 +1396,23 @@
             cleanText = cleanText.replace(/pythondef/g, 'def');
             cleanText = cleanText.replace(/^python\s+/gm, '');
             
-            // Remove leading indentation from the entire text
-            const lines = cleanText.split('\n');
-            const minIndent = Math.min(...lines
-                .filter(line => line.trim().length > 0)
-                .map(line => line.match(/^\s*/)[0].length)
-            );
-            
-            if (minIndent > 0) {
-                cleanText = lines.map(line => 
-                    line.length > minIndent ? line.substring(minIndent) : line.trim()
-                ).join('\n');
-            }
-            
-            // Clean up whitespace
+            // Clean up whitespace but preserve structure
             cleanText = cleanText.replace(/\n\s*\n\s*\n+/g, '\n\n');
             cleanText = cleanText.replace(/[ \t]+/g, ' ');
             cleanText = cleanText.trim();
             
-            // Simple, safe HTML conversion - NO complex styling
+            // Simple, safe HTML conversion - match the indentation style of models/voices
             return cleanText
-                // Convert headings (minimal styling)
-                .replace(/###\s*(.*?)(?=\n|$)/g, '<h4><strong>$1</strong></h4>')
-                .replace(/##\s*(.*?)(?=\n|$)/g, '<h3><strong>$1</strong></h3>')
-                .replace(/#\s*(.*?)(?=\n|$)/g, '<h2><strong>$1</strong></h2>')
+                // Convert headings (match the style of models/voices with consistent left alignment)
+                .replace(/###\s*(.*?)(?=\n|$)/g, '<strong>$1</strong><br>')
+                .replace(/##\s*(.*?)(?=\n|$)/g, '<strong>$1</strong><br>')
+                .replace(/#\s*(.*?)(?=\n|$)/g, '<strong>$1</strong><br>')
                 
-                // Convert code blocks (minimal styling)
-                .replace(/```python\n([\s\S]*?)\n```/g, '<div style="background: #f5f5f5; padding: 12px; margin: 12px 0; border-radius: 4px; overflow-x: auto;"><pre>$1</pre></div>')
-                .replace(/```([\s\S]*?)```/g, '<div style="background: #f5f5f5; padding: 12px; margin: 12px 0; border-radius: 4px; overflow-x: auto;"><pre>$1</pre></div>')
+                // Convert code blocks (keep left-aligned like models/voices)
+                .replace(/```python\n([\s\S]*?)\n```/g, '<div style="background: #f5f5f5; padding: 12px; margin: 12px 0; border-radius: 4px; overflow-x: auto;"><pre style="margin: 0; text-align: left;">$1</pre></div>')
+                .replace(/```([\s\S]*?)```/g, '<div style="background: #f5f5f5; padding: 12px; margin: 12px 0; border-radius: 4px; overflow-x: auto;"><pre style="margin: 0; text-align: left;">$1</pre></div>')
                 
-                // Convert inline code (minimal styling)
+                // Convert inline code (keep consistent with overall formatting)
                 .replace(/`([^`\n]+)`/g, '<code style="background: #f0f0f0; padding: 2px 4px;">$1</code>')
                 
                 // Convert text formatting
@@ -1433,7 +1422,7 @@
                 // Convert line breaks
                 .replace(/\n/g, '<br>')
                 
-                // Convert lists (simple approach)
+                // Convert lists (keep left-aligned like models/voices output)
                 .replace(/^•\s+(.*)$/gm, '• $1<br>')
                 .replace(/^(\d+)\.\s+(.*)$/gm, '$1. $2<br>');
         }
