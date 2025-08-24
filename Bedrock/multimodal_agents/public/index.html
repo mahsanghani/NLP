@@ -274,6 +274,12 @@
             border-radius: 12px;
             margin-top: 20px;
             border-left: 4px solid #28a745;
+            /* Fix for extra line spacing */
+            overflow: hidden;
+        }
+
+        .success > *:last-child {
+            margin-bottom: 0 !important;
         }
 
         .warning {
@@ -294,13 +300,21 @@
         .generated-image {
             max-width: 100%;
             border-radius: 12px;
-            margin-top: 20px;
+            margin: 20px auto;
+            display: block;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             transition: transform 0.3s ease;
         }
 
         .generated-image:hover {
             transform: scale(1.02);
+        }
+
+        /* Center images in response area */
+        .response-area .generated-image {
+            text-align: center;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .button-group {
@@ -976,7 +990,7 @@
                             <strong>🎨 Image Generated Successfully!</strong><br>
                             <strong>Model:</strong> ${result.model || model}<br>
                             <strong>Prompt:</strong> "${prompt}"<br>
-                            <strong>Dimensions:</strong> ${width}x${height}px<br><br>
+                            <strong>Dimensions:</strong> ${width}x${height}px
                         </div>
                     `;
                     
@@ -1065,9 +1079,7 @@
                             <strong>🎤 Demo Speech Synthesis</strong><br>
                             <strong>Voice:</strong> ${result.voice_used}<br>
                             <strong>Format:</strong> ${result.output_format}<br>
-                            <strong>Text:</strong> "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"<br><br>
-                            <em>In the full version, you would hear AI-generated speech here.</em><br>
-                            Connect to the backend to experience realistic text-to-speech synthesis.
+                            <strong>Text:</strong> "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"
                         </div>
                     `;
                 }
@@ -1401,8 +1413,11 @@
             cleanText = cleanText.replace(/[ \t]+/g, ' ');
             cleanText = cleanText.trim();
             
+            // Remove trailing <br> tags to prevent extra lines
+            cleanText = cleanText.replace(/(<br\s*\/?>)+$/gi, '');
+            
             // Simple, safe HTML conversion - match the indentation style of models/voices
-            return cleanText
+            let formatted = cleanText
                 // Convert headings (match the style of models/voices with consistent left alignment)
                 .replace(/###\s*(.*?)(?=\n|$)/g, '<strong>$1</strong><br>')
                 .replace(/##\s*(.*?)(?=\n|$)/g, '<strong>$1</strong><br>')
@@ -1425,6 +1440,11 @@
                 // Convert lists (keep left-aligned like models/voices output)
                 .replace(/^•\s+(.*)$/gm, '• $1<br>')
                 .replace(/^(\d+)\.\s+(.*)$/gm, '$1. $2<br>');
+            
+            // Final cleanup: Remove trailing <br> tags again
+            formatted = formatted.replace(/(<br\s*\/?>)+$/gi, '');
+            
+            return formatted;
         }
 
         // Auto-resize textareas
@@ -1444,6 +1464,138 @@
                 button.title = 'This may take a few moments to process';
             }
         });
+
+        // Keyboard shortcuts for better UX
+        document.addEventListener('keydown', function(e) {
+            // Escape key to close loading overlay
+            if (e.key === 'Escape' && !document.getElementById('loading').classList.contains('hidden')) {
+                hideLoading();
+            }
+            
+            // Tab navigation shortcuts
+            if (e.altKey) {
+                switch(e.key) {
+                    case '1':
+                        e.preventDefault();
+                        switchTab('chat');
+                        break;
+                    case '2':
+                        e.preventDefault();
+                        switchTab('image');
+                        break;
+                    case '3':
+                        e.preventDefault();
+                        switchTab('speech');
+                        break;
+                    case '4':
+                        e.preventDefault();
+                        switchTab('status');
+                        break;
+                    case '5':
+                        e.preventDefault();
+                        switchTab('examples');
+                        break;
+                }
+            }
+        });
+
+        // Enhanced error handling with retry functionality
+        window.addEventListener('error', function(e) {
+            console.error('Application error:', e.error);
+            if (!isOfflineMode) {
+                // Try to reconnect if there's a connection error
+                setTimeout(checkConnection, 2000);
+            }
+        });
+
+        // Handle unhandled promise rejections
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('Unhandled promise rejection:', e.reason);
+            hideLoading(); // Ensure loading state is cleared
+        });
+
+        // Periodic connection health check (every 5 minutes)
+        setInterval(async function() {
+            if (!isOfflineMode) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/health`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({}),
+                        timeout: 3000
+                    });
+                    
+                    if (!response.ok && connectionStatus === 'connected') {
+                        console.warn('Connection health check failed, switching to offline mode');
+                        isOfflineMode = true;
+                        connectionStatus = 'offline';
+                        document.getElementById('connection-status').textContent = '⚠️ Demo Mode (Connection Lost)';
+                        document.getElementById('connection-status').className = 'connection-status status-disconnected';
+                        document.getElementById('offline-notice').style.display = 'block';
+                    }
+                } catch (error) {
+                    if (connectionStatus === 'connected') {
+                        console.warn('Connection health check failed:', error);
+                        isOfflineMode = true;
+                        connectionStatus = 'offline';
+                        document.getElementById('connection-status').textContent = '⚠️ Demo Mode (Connection Lost)';
+                        document.getElementById('connection-status').className = 'connection-status status-disconnected';
+                        document.getElementById('offline-notice').style.display = 'block';
+                    }
+                }
+            }
+        }, 300000); // 5 minutes
+
+        // Service worker registration for offline functionality (optional)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                // Service worker would be implemented separately
+                console.log('Service worker support detected (not implemented in demo)');
+            });
+        }
+
+        // Performance monitoring
+        if ('performance' in window) {
+            window.addEventListener('load', function() {
+                setTimeout(function() {
+                    const perfData = performance.getEntriesByType('navigation')[0];
+                    if (perfData) {
+                        console.log(`Page load time: ${Math.round(perfData.loadEventEnd - perfData.fetchStart)}ms`);
+                    }
+                }, 0);
+            });
+        }
+
+        // Cleanup function for better memory management
+        window.addEventListener('beforeunload', function() {
+            // Cancel any ongoing requests
+            if (window.AbortController) {
+                // Implementation would depend on having AbortController instances
+                console.log('Cleaning up resources...');
+            }
+        });
+
+        // Initialize performance observers if available
+        if ('PerformanceObserver' in window) {
+            try {
+                const observer = new PerformanceObserver(function(list) {
+                    const entries = list.getEntries();
+                    entries.forEach(function(entry) {
+                        if (entry.entryType === 'measure' || entry.entryType === 'navigation') {
+                            console.log(`Performance: ${entry.name} - ${Math.round(entry.duration)}ms`);
+                        }
+                    });
+                });
+                observer.observe({entryTypes: ['measure', 'navigation']});
+            } catch (e) {
+                console.log('Performance observer not fully supported');
+            }
+        }
+
+        console.log('🚀 AWS Bedrock Multi-Modal AI Application Initialized');
+        console.log('💡 Use Alt+1-5 for quick tab navigation');
+        console.log('⌨️ Use Ctrl/Cmd+Enter in chat for quick send');
+        console.log('🎯 Application ready for AI interactions!');
     </script>
 </body>
 </html>
